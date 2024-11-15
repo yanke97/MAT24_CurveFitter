@@ -2,9 +2,13 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import \
     FigureCanvasQTAgg as FigureCanvas
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-                             QSizePolicy, QGridLayout, QLineEdit, QPushButton)
+                             QSizePolicy, QGridLayout, QLineEdit, QPushButton,
+                             QFileDialog, QStatusBar)
 
 from PyQt5.QtGui import (QFont, QIcon)
+
+from pathlib import Path
+import pandas as pd
 
 
 class CFAppGui(QMainWindow):
@@ -24,6 +28,7 @@ class CFAppGui(QMainWindow):
         self._create_fonts()
         self._create_tbs()
         self._create_btns()
+        self._create_status_bar()
 
         self._central_widget = QWidget()
         self._central_widget.setLayout(self._main_layout)
@@ -36,6 +41,8 @@ class CFAppGui(QMainWindow):
         self._output_layout.addWidget(self.graph_output, 1, 0, 1, 2)
         self._output_layout.addWidget(self.tb_out_path, 0, 1)
         self._output_layout.addWidget(self.btn_file_out, 0, 0)
+
+        self._processing_layout.addWidget(self.btn_fit, 0, 0)
 
     def _create_layouts(self) -> None:
         self._main_layout = QHBoxLayout()
@@ -98,6 +105,14 @@ class CFAppGui(QMainWindow):
         self.btn_file_out.setIcon(
             QIcon(r"e:\15_MAT24_Curve fitter\00_Daten\open-folder.png"))
 
+        self._font = QFont()
+        self._font.setFamily("Calibri")
+        self._font.setPointSize(12)
+
+        self.btn_fit = QPushButton("Fit and Extrap")
+        self.btn_fit.setBaseSize(175, 25)
+        self.btn_fit.setFont(self._font)
+
     def _create_fonts(self) -> None:
         """
         Create the fonts used in the GUI
@@ -120,3 +135,61 @@ class CFAppGui(QMainWindow):
         self._font = QFont()
         self._font.setFamily("Calibri")
         self._font.setPointSize(12)
+
+    def _create_status_bar(self) -> None:
+        """
+        Create the Status Bar of the GUI
+        ...
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        status = QStatusBar()
+
+        self.setStatusBar(status)
+
+    def file_dialog(self, file_type: str) -> tuple:
+        """
+        Open file dialog window and return the path to selected folder.
+
+        Parameter
+        ---------
+        None
+
+        Return
+        ------
+        path: Path
+            path pointing to the folder where the banking data is stored
+
+        """
+        return QFileDialog.getOpenFileName(
+            self, "Select file", "", file_type)
+
+    def plot_data(self, data, plot: str, line_type="-", name: str = "") -> None:
+        if type(data) == pd.DataFrame and plot == "input":
+            self.axes_input.plot(data["eng_strain"], data["eng_stress"], line_type)
+            self.axes_input.set_xlim(0)
+            self.axes_input.set_ylim(0)
+            self.axes_input.set_xlabel("Eng. strain")
+            self.axes_input.set_ylabel("Eng. stress")
+            self.graph_input.draw_idle()
+
+        elif type(data) == pd.DataFrame and plot == "output":
+            self.axes_output.plot(data["strain"], data["stress"], line_type, label=name)
+            self.axes_output.set_xlim(0)
+            self.axes_output.set_ylim(0)
+            self.axes_output.set_xlabel("strain")
+            self.axes_output.set_ylabel("stress")
+            self.axes_output.legend()
+            self.graph_output.draw_idle()
+
+        elif type(data) == list and plot == "output":
+            self.axes_output.plot(data[0], data[1], line_type, label=name)
+            self.axes_output.legend()
+            self.graph_output.draw_idle()
