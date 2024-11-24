@@ -38,11 +38,13 @@ class CFAppGui(QMainWindow):
         self._input_layout.addWidget(self.tb_in_path, 0, 1)
         self._input_layout.addWidget(self.btn_file_in, 0, 0)
 
-        self._output_layout.addWidget(self.graph_output, 1, 0, 1, 2)
+        self._output_layout.addWidget(self.graph_output_1, 1, 0, 1, 2)
+        self._output_layout.addWidget(self.graph_output_2, 2, 0, 1, 2)
         self._output_layout.addWidget(self.tb_out_path, 0, 1)
         self._output_layout.addWidget(self.btn_file_out, 0, 0)
 
         self._processing_layout.addWidget(self.btn_fit, 0, 0)
+        self._processing_layout.addWidget(self.btn_export, 1, 0)
 
     def _create_layouts(self) -> None:
         self._main_layout = QHBoxLayout()
@@ -72,16 +74,24 @@ class CFAppGui(QMainWindow):
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.axes_input = self.graph_input.figure.subplots()
-        self.axes_input.set_title("Curve from file")
+        self.axes_input.set_title("stress - strain data (eng.)")
         self.axes_input.grid(True)
 
-        self.graph_output = FigureCanvas(plt.figure())
-        self.graph_output.setSizePolicy(
+        self.graph_output_1 = FigureCanvas(plt.figure())
+        self.graph_output_1.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.axes_output = self.graph_output.figure.subplots()
-        self.axes_output.set_title("Curve to file")
-        self.axes_output.grid(True)
+        self.axes_output_1 = self.graph_output_1.figure.subplots()
+        self.axes_output_1.set_title("stress -strain data")
+        self.axes_output_1.grid(True)
+
+        self.graph_output_2 = FigureCanvas(plt.figure())
+        self.graph_output_2.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.axes_output_2 = self.graph_output_2.figure.subplots()
+        self.axes_output_2.set_title("stress - plastic strain")
+        self.axes_output_2.grid(True)
 
     def _create_tbs(self) -> None:
         self.tb_in_path = QLineEdit()
@@ -112,6 +122,10 @@ class CFAppGui(QMainWindow):
         self.btn_fit = QPushButton("Fit and Extrap")
         self.btn_fit.setBaseSize(175, 25)
         self.btn_fit.setFont(self._font)
+
+        self.btn_export = QPushButton("Export")
+        self.btn_export.setBaseSize(175, 25)
+        self.btn_export.setFont(self._font)
 
     def _create_fonts(self) -> None:
         """
@@ -173,23 +187,28 @@ class CFAppGui(QMainWindow):
 
     def plot_data(self, data, plot: str, line_type="-", name: str = "") -> None:
         if type(data) == pd.DataFrame and plot == "input":
-            self.axes_input.plot(data["eng_strain"], data["eng_stress"], line_type)
+            self.axes_input.plot(data["eng_strain"],
+                                 data["eng_stress"], line_type)
             self.axes_input.set_xlim(0)
             self.axes_input.set_ylim(0)
-            self.axes_input.set_xlabel("Eng. strain")
-            self.axes_input.set_ylabel("Eng. stress")
             self.graph_input.draw_idle()
 
-        elif type(data) == pd.DataFrame and plot == "output":
-            self.axes_output.plot(data["strain"], data["stress"], line_type, label=name)
-            self.axes_output.set_xlim(0)
-            self.axes_output.set_ylim(0)
-            self.axes_output.set_xlabel("strain")
-            self.axes_output.set_ylabel("stress")
-            self.axes_output.legend()
-            self.graph_output.draw_idle()
+        elif type(data) == pd.DataFrame and plot == "output_1":
+            self.axes_output_1.plot(
+                data["strain"], data["stress"], line_type, label=name)
+            self.axes_output_1.set_xlim(0)
+            self.axes_output_1.set_ylim(0)
+            self.axes_output_1.legend()
+            self.graph_output_1.draw_idle()
 
-        elif type(data) == list and plot == "output":
-            self.axes_output.plot(data[0], data[1], line_type, label=name)
-            self.axes_output.legend()
-            self.graph_output.draw_idle()
+        elif type(data) == list and plot == "output_1":
+            self.axes_output_1.plot(data[0], data[1], line_type, label=name)
+            self.axes_output_1.legend()
+            self.graph_output_1.draw_idle()
+
+        elif type(data) == list and plot == "output_2":
+            self.axes_output_2.plot(data[0], data[1], line_type, label=name)
+            self.axes_output_2.set_xlim(0, 1.2)
+            self.axes_output_2.set_ylim(0, (data[1].max())*1.2)
+            self.axes_output_2.legend()
+            self.graph_output_2.draw_idle()

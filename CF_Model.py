@@ -1,10 +1,22 @@
 import pandas as pd
 from pathlib import Path
 from csv import Sniffer
-from numpy import (log, exp, where, sign, diff)
+from numpy import (log, exp, where, sign, diff, linspace)
+from numpy import round as nround
+from math import log as mlog, e
 from scipy.optimize import curve_fit
+from string import Template
 
-from CF_Errors import FileError
+from CF_Errors import FileError, ExportPointNoError, TemplateError
+
+
+class LsDynaTemplate(Template):
+    """
+    Template class inheriting form strings Template.
+    Delimiter is changed to prevent interference with 
+    Ls-Dynas comment character.
+    """
+    delimiter = "$%"
 
 
 def _hooks_straight(x, m) -> float:
@@ -71,8 +83,114 @@ def comp_material_data(df: pd.DataFrame) -> tuple:
     # Rp_0.2 of the material
     Rp_02 = df["stress"][Rp_02_I]
 
+    # Compute plastic strain curve
+    df["plastic_strain"] = df["strain"][Rp_02_I::] - df["strain"][Rp_02_I]
+    df["plastic_stress"] = df["stress"][Rp_02_I::]
+
+    # Compute Failure strain A_5
+    # Compute pandas series with stress drops
+    stress_drop = pd.Series(df["plastic_stress"].diff())
+    A_5_I = stress_drop.idxmin()-1
+    A_5 = df["plastic_strain"][A_5_I]
+
     # Rm of the material
     Rm_I = df["stress"].idxmax()
     Rm = df["stress"][Rm_I]
+    Ag = (df["strain"][Rm_I]) - (Rm/E)
 
-    return E, Rp_02, Rm, Rp_02_I, Rm_I
+    return df, [E, Rp_02, Rm, Rp_02_I, Rm_I, Ag, A_5]
+
+
+def extrapolate(data: list, extrap_type: str) -> list:
+    df = data[0]
+    start_index = data[1]
+    end_index = data[2]
+
+    if extrap_type == "Swift":
+        Ag = data[3]
+        Rm = data[4]
+
+        n_0 = mlog(Ag+1)
+        c_0 = Rm*(e/n_0)**n_0
+        phi_0 = 0.1
+
+        initial_guess = [c_0, phi_0, n_0]
+
+        res = curve_fit(_swift_extrapolation,
+                        df["strain"][start_index:end_index]-df["strain"][start_index], df["stress"][start_index:end_index], initial_guess)
+
+        c = res[0][0]
+        phi = res[0][1]
+        n = res[0][2]
+
+        print(c, phi, n)
+
+        extrap_strain = pd.Series(linspace(0, 1, 100))
+        extrap_stress = _swift_extrapolation(extrap_strain, c, phi, n)
+
+        result = [extrap_strain, extrap_stress]
+
+    return result
+
+
+def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, point_no: int,
+                spacing: str, fitted_data: list[list], E: str, path: Path) -> None:
+    if int(point_no) > 100:
+        raise ExportPointNoError from None
+    else:
+        export_data: dict = {}
+        export_data["Title"] = title
+        export_data["mid"] = mid.rjust(10)
+        export_data["ro"] = rho.rjust(10)
+        export_data["E"] = str(round(E, 2)).rjust(10)
+        export_data["pr"] = poisons_ratio.rjust(10)
+        export_data["fail"] = fail.rjust(10)
+
+        if spacing == "equi" or point_no == 100:
+            ids = linspace(0, 99, point_no)
+
+        else:
+            point_no_1 = round(point_no*0.6)
+            point_no_2 = point_no - point_no_1
+
+            ids_1 = linspace(0, 50, point_no_1)
+            ids_1 = nround(ids_1).astype(int)
+            ids = set(ids_1)
+
+            ids_2 = linspace(51, 99, point_no_2)
+            ids_2 = nround(ids_2).astype(int)
+
+            ids.update(ids_2)
+
+        for j, i in enumerate(ids):
+            key_a = f"a{j+1}"
+            key_o = f"o{j+1}"
+
+            export_data[key_a] = str(round(fitted_data[0][i], 3)).rjust(20)
+            export_data[key_o] = str(round(fitted_data[1][i], 3)).rjust(20)
+
+        j += 1
+
+        while j+1 <= 100:
+            key_a = f"a{j+1}"
+            key_o = f"o{j+1}"
+
+            export_data[key_a] = "$"
+            export_data[key_o] = "$"
+
+            j += 1
+
+        write_to_file(export_data, path)
+
+
+def write_to_file(export_data: dict, path: Path) -> None:
+    template_path = Path(r"E:\15_MAT24_Curve fitter\Mat_24_template.k")
+    with open(template_path, "r") as template:
+        try:
+            mat_card_content: str = LsDynaTemplate(
+                template.read()).substitute(export_data)
+        except ValueError:
+            raise TemplateError(template_path) from None
+
+    with open(path, "w") as file:
+        file.writelines(mat_card_content)
