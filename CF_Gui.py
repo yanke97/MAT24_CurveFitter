@@ -2,8 +2,8 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import \
     FigureCanvasQTAgg as FigureCanvas
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-                             QSizePolicy, QGridLayout, QLineEdit, QPushButton,
-                             QFileDialog, QStatusBar)
+                             QSizePolicy, QGridLayout, QLineEdit, QMenu,
+                             QFileDialog, QStatusBar, QToolBar, QAction, QMenuBar)
 
 from PyQt5.QtGui import (QFont, QIcon)
 
@@ -27,34 +27,34 @@ class CFAppGui(QMainWindow):
         self._create_graphs()
         self._create_fonts()
         self._create_tbs()
-        self._create_btns()
+        self._create_actns()
         self._create_status_bar()
+        self._create_tool_bar()
+        self._create_menu_bar()
 
         self._central_widget = QWidget()
         self._central_widget.setLayout(self._main_layout)
         self.setCentralWidget(self._central_widget)
 
-        self._input_layout.addWidget(self.graph_input, 1, 0, 1, 2)
-        self._input_layout.addWidget(self.tb_in_path, 0, 1)
-        self._input_layout.addWidget(self.btn_file_in, 0, 0)
+        self._layout_graphs.addWidget(self.graph_input, 0, 0, 2, 1)
+        self._layout_graphs.addWidget(self.graph_output_1, 0, 1)
+        self._layout_graphs.addWidget(self.graph_output_2, 1, 1)
 
-        self._output_layout.addWidget(self.graph_output_1, 1, 0, 1, 2)
-        self._output_layout.addWidget(self.graph_output_2, 2, 0, 1, 2)
-        self._output_layout.addWidget(self.tb_out_path, 0, 1)
-        self._output_layout.addWidget(self.btn_file_out, 0, 0)
+        self._tool_bar.addAction(self.import_action)
+        self._tool_bar.addAction(self.fit_action)
+        self._tool_bar.addAction(self.export_action)
 
-        self._processing_layout.addWidget(self.btn_fit, 0, 0)
-        self._processing_layout.addWidget(self.btn_export, 1, 0)
+        self._file_menu.addAction(self.settings_action)
+        self._file_menu.addSeparator()
+        self._file_menu.addAction(self.exit_action)
 
     def _create_layouts(self) -> None:
-        self._main_layout = QHBoxLayout()
-        self._input_layout = QGridLayout()
-        self._processing_layout = QGridLayout()
-        self._output_layout = QGridLayout()
+        self._main_layout = QVBoxLayout()
+        self._layout_graphs = QGridLayout()
+        self._layout_btns = QHBoxLayout()
 
-        self._main_layout.addLayout(self._input_layout)
-        self._main_layout.addLayout(self._processing_layout)
-        self._main_layout.addLayout(self._output_layout)
+        self._main_layout.addLayout(self._layout_btns)
+        self._main_layout.addLayout(self._layout_graphs)
 
     def _create_graphs(self) -> None:
         """
@@ -74,7 +74,7 @@ class CFAppGui(QMainWindow):
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.axes_input = self.graph_input.figure.subplots()
-        self.axes_input.set_title("stress - strain data (eng.)")
+        self.axes_input.set_title("stress - strain (eng.)")
         self.axes_input.grid(True)
 
         self.graph_output_1 = FigureCanvas(plt.figure())
@@ -82,7 +82,7 @@ class CFAppGui(QMainWindow):
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.axes_output_1 = self.graph_output_1.figure.subplots()
-        self.axes_output_1.set_title("stress -strain data")
+        self.axes_output_1.set_title("stress -straint")
         self.axes_output_1.grid(True)
 
         self.graph_output_2 = FigureCanvas(plt.figure())
@@ -104,28 +104,24 @@ class CFAppGui(QMainWindow):
         self.tb_out_path.setFont(self._font)
         self.tb_out_path.setPlaceholderText("Enter path to output .k-file")
 
-    def _create_btns(self) -> None:
-        self.btn_file_in = QPushButton()
-        self.btn_file_in.setBaseSize(25, 25)
-        self.btn_file_in.setIcon(
-            QIcon(r"e:\15_MAT24_Curve fitter\00_Daten\open-folder.png"))
+    def _create_actns(self) -> None:
+        self.import_action = QAction("Import .csv-file")
+        self.import_action.setFont(self._font)
+        self.import_action.setIcon(
+            QIcon(r"e:\15_MAT24_Curve fitter\00_Daten\file-import.png"))
 
-        self.btn_file_out = QPushButton()
-        self.btn_file_out.setBaseSize(25, 25)
-        self.btn_file_out.setIcon(
-            QIcon(r"e:\15_MAT24_Curve fitter\00_Daten\open-folder.png"))
+        self.fit_action = QAction("Fit and Extrapolate Curve")
+        self.fit_action.setFont(self._font)
+        self.fit_action.setIcon(
+            QIcon(r"E:\15_MAT24_Curve fitter\00_Daten\graph-curve.png"))
 
-        self._font = QFont()
-        self._font.setFamily("Calibri")
-        self._font.setPointSize(12)
+        self.export_action = QAction("Export to .k-file")
+        self.export_action.setFont(self._font)
+        self.export_action.setIcon(
+            QIcon(r"E:\15_MAT24_Curve fitter\00_Daten\file-export.png"))
 
-        self.btn_fit = QPushButton("Fit and Extrap")
-        self.btn_fit.setBaseSize(175, 25)
-        self.btn_fit.setFont(self._font)
-
-        self.btn_export = QPushButton("Export")
-        self.btn_export.setBaseSize(175, 25)
-        self.btn_export.setFont(self._font)
+        self.settings_action = QAction("Settings")
+        self.exit_action = QAction("Exit")
 
     def _create_fonts(self) -> None:
         """
@@ -140,12 +136,6 @@ class CFAppGui(QMainWindow):
         -------
         None
         """
-
-        self._font_desc = QFont()
-        self._font_desc.setFamily("Calibir Light")
-        self._font_desc.setPointSize(12)
-        self._font_desc.setBold(True)
-
         self._font = QFont()
         self._font.setFamily("Calibri")
         self._font.setPointSize(12)
@@ -168,6 +158,16 @@ class CFAppGui(QMainWindow):
 
         self.setStatusBar(status)
 
+    def _create_tool_bar(self) -> None:
+        self._tool_bar = QToolBar()
+        self.addToolBar(self._tool_bar)
+
+    def _create_menu_bar(self) -> None:
+        self._menu_bar = QMenuBar()
+        self.setMenuBar(self._menu_bar)
+        self._file_menu = QMenu("&File", self)
+        self._menu_bar.addMenu(self._file_menu)
+
     def file_dialog(self, file_type: str) -> tuple:
         """
         Open file dialog window and return the path to selected folder.
@@ -185,15 +185,15 @@ class CFAppGui(QMainWindow):
         return QFileDialog.getOpenFileName(
             self, "Select file", "", file_type)
 
-    def plot_data(self, data, plot: str, line_type="-", name: str = "") -> None:
-        if type(data) == pd.DataFrame and plot == "input":
+    def plot_data(self, data, graph: str, line_type="-", name: str = "") -> None:
+        if type(data) == pd.DataFrame and graph == "input":
             self.axes_input.plot(data["eng_strain"],
                                  data["eng_stress"], line_type)
             self.axes_input.set_xlim(0)
             self.axes_input.set_ylim(0)
             self.graph_input.draw_idle()
 
-        elif type(data) == pd.DataFrame and plot == "output_1":
+        elif type(data) == pd.DataFrame and graph == "output_1":
             self.axes_output_1.plot(
                 data["strain"], data["stress"], line_type, label=name)
             self.axes_output_1.set_xlim(0)
@@ -201,14 +201,28 @@ class CFAppGui(QMainWindow):
             self.axes_output_1.legend()
             self.graph_output_1.draw_idle()
 
-        elif type(data) == list and plot == "output_1":
+        elif type(data) == list and graph == "output_1":
             self.axes_output_1.plot(data[0], data[1], line_type, label=name)
             self.axes_output_1.legend()
             self.graph_output_1.draw_idle()
 
-        elif type(data) == list and plot == "output_2":
+        elif type(data) == list and graph == "output_2":
             self.axes_output_2.plot(data[0], data[1], line_type, label=name)
             self.axes_output_2.set_xlim(0, 1.2)
             self.axes_output_2.set_ylim(0, (data[1].max())*1.2)
             self.axes_output_2.legend()
             self.graph_output_2.draw_idle()
+
+    def clear_graphs(self, graph: str) -> None:
+        if graph == "input":
+            self.axes_input.cla()
+            self.axes_input.grid(True)
+            self.axes_input.set_title("stress - strain (eng.)")
+        if graph == "output_1":
+            self.axes_output_1.cla()
+            self.axes_output_1.grid(True)
+            self.axes_output_1.set_title("stress - strain")
+        if graph == "output_2":
+            self.axes_output_2.cla()
+            self.axes_output_2.grid(True)
+            self.axes_output_2.set_title("stress - plastic strain")

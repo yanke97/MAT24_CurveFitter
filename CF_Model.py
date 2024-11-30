@@ -61,10 +61,10 @@ def comp_real_stress_strain(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def comp_material_data(df: pd.DataFrame) -> tuple:
+def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> tuple:
     # compute youngs modulus
     res = curve_fit(_hooks_straight,
-                    df["eng_strain"][0:300], df["eng_stress"][0:300])
+                    df["eng_strain"][0:300], df["eng_stress"][e_start:e_end])
     E = res[0][0]
 
     # compute Rp_02
@@ -123,8 +123,6 @@ def extrapolate(data: list, extrap_type: str) -> list:
         phi = res[0][1]
         n = res[0][2]
 
-        print(c, phi, n)
-
         extrap_strain = pd.Series(linspace(0, 1, 100))
         extrap_stress = _swift_extrapolation(extrap_strain, c, phi, n)
 
@@ -134,7 +132,7 @@ def extrapolate(data: list, extrap_type: str) -> list:
 
 
 def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, point_no: int,
-                spacing: str, fitted_data: list[list], E: str, path: Path) -> None:
+                spacing: str, fitted_data: list[list], E: str, path_str: str, template_path_str:str) -> Path:
     if int(point_no) > 100:
         raise ExportPointNoError from None
     else:
@@ -180,17 +178,27 @@ def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, p
 
             j += 1
 
-        write_to_file(export_data, path)
+        path: Path = write_to_file(export_data, path_str, template_path_str)
+
+        return path
 
 
-def write_to_file(export_data: dict, path: Path) -> None:
-    template_path = Path(r"E:\15_MAT24_Curve fitter\Mat_24_template.k")
-    with open(template_path, "r") as template:
-        try:
-            mat_card_content: str = LsDynaTemplate(
-                template.read()).substitute(export_data)
-        except ValueError:
-            raise TemplateError(template_path) from None
+def write_to_file(data: dict, path_str: str, template_path_str:str) -> None:
+    template_path = Path(template_path_str)
+    path: Path = Path(path_str.replace("\"", ""))
 
-    with open(path, "w") as file:
-        file.writelines(mat_card_content)
+    if template_path.is_file() and template_path.suffix == ".k":
+
+        if path.is_file():
+
+            with open(template_path, "r") as template, open(path, "w") as file:
+                mat_card_content: str = LsDynaTemplate(
+                        template.read()).substitute(data)
+                
+                file.writelines(mat_card_content)
+
+        else:
+            raise FileError(path) from None
+    
+    else:
+        raise TemplateError(template_path) from None

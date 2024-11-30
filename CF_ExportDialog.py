@@ -1,13 +1,15 @@
 from PyQt5.QtWidgets import (QDialog, QPushButton, QDialogButtonBox, QLineEdit,
-                             QLabel, QFormLayout, QSpacerItem, QRadioButton)
+                             QLabel, QFormLayout, QSpacerItem, QRadioButton, QSizePolicy)
 from PyQt5.QtGui import (QFont, QIcon)
+from PyQt5.QtCore import Qt
 
 
 class ExportDialog(QDialog):
-    def __init__(self, failure_strain, parent=None, ):
+    def __init__(self, failure_strain=None, parent=None, ):
         super().__init__(parent)
 
         self.setWindowTitle("Export")
+        self.setSizePolicy(QSizePolicy.Fixed,QSizePolicy.Fixed)
         self._create_fonts()
         self._create_btns()
         self._create_lbls()
@@ -18,6 +20,7 @@ class ExportDialog(QDialog):
         self.setLayout(self._layout)
 
         self._layout.addRow(self._lbl_info)
+        self._layout.addRow(self.btn_file_out, self.tb_out_path)
         self._layout.addRow(self._lbl_title, self.tb_title)
         self._layout.addRow(self._lbl_mid, self.tb_mid)
         self._layout.addRow(self._lbl_rho, self.tb_rho)
@@ -33,12 +36,11 @@ class ExportDialog(QDialog):
     def _create_btns(self) -> None:
         btns = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.btnbx = QDialogButtonBox(btns)
-        # when the firs btn in the box (Save) is clicked an accepted signal is
-        # emitted since this btn has a acceptive role in the GUI. This signal
-        # is than connected to the accept method of the dialog. Similar is true
-        # for the secend btn which has a rejective role in the GUI
-        self.btnbx.accepted.connect(self.accept)
-        self.btnbx.rejected.connect(self.reject)
+
+        self.btn_file_out = QPushButton()
+        self.btn_file_out.setBaseSize(25, 25)
+        self.btn_file_out.setIcon(
+            QIcon(r"e:\15_MAT24_Curve fitter\00_Daten\open-folder.png"))
 
     def _create_lbls(self) -> None:
         self._lbl_info = QLabel(
@@ -73,6 +75,12 @@ class ExportDialog(QDialog):
         self.tb_point_no = QLineEdit("50")
         self.tb_point_no.setFont(self._font)
         self.tb_point_no.setFixedSize(100, 25)
+
+        self.tb_out_path = QLineEdit()
+        self.tb_out_path.setBaseSize(100, 25)
+        self.tb_out_path.setFont(self._font)
+        self.tb_out_path.setPlaceholderText("Enter path to output .k-file")
+        # self.tb_out_path.setAlignment(Qt.AlignRight)
 
     def _create_rdbtn(self) -> None:
         self.rdbtn_equi = QRadioButton("Equidistant Spacing")

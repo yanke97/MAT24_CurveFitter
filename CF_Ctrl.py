@@ -1,3 +1,5 @@
+from sys import exit as sys_exit
+from configparser import ConfigParser
 from pathlib import Path
 import pandas as pd
 
@@ -13,12 +15,29 @@ from CF_ExportDialog import ExportDialog
 class CfCtrl:
     def __init__(self, gui: CFAppGui, model):
         self._gui = gui
+        self._export_dlg = None
         self._model = model
         self._data = pd.DataFrame()
         self._fitted_data = []
         self._mat_characteristics = []
+        self._extrap_method: str = ""
+        self._e_start: int = 0
+        self._e_end: int = 100
+        self._template_path_str:str = ""
+
+        self._read_ini()
         self._connect_signals()
         self._update_status("Application started.")
+
+    def _read_ini(self) -> None:
+        parser = ConfigParser()
+        parser.read(r"e:\15_MAT24_Curve fitter\CF.ini")
+
+        self._extrap_method = parser.get(
+            "extrapolation_fitting", "extrapolation_method")
+        self._e_start: int = parser.getint("extrapolation_fitting", "e_extrap_start")
+        self._e_end: int = parser.getint("extrapolation_fitting", "e_extrap_end")
+        self._template_path_str: str = parser.get("export", "template_path")
 
     def _connect_signals(self):
         # functions (slots) triggered by events (signals) usually need to be
@@ -33,17 +52,16 @@ class CfCtrl:
         # arguments than expected.
         # https://realpython.com/python-pyqt-gui-calculator/#creating-a-calculator-app-with-python-and-pyqt
 
-        self._gui.btn_file_in.clicked.connect(
+        self._gui.import_action.triggered.connect(
             partial(self._file_dialog, "*.csv"))
 
-        self._gui.btn_file_out.clicked.connect(
-            partial(self._file_dialog, "*.k"))
+        self._gui.fit_action.triggered.connect(self._fit_extrap)
 
-        self._gui.tb_in_path.returnPressed.connect(self._get_data)
+        self._gui.export_action.triggered.connect(self._export)
 
-        self._gui.btn_fit.clicked.connect(self._fit_extrap)
+        self._gui.settings_action.triggered.connect(self._settings)
 
-        self._gui.btn_export.clicked.connect(self._export)
+        self._gui.exit_action.triggered.connect(self._exit_app)
 
     def _update_status(self, text: str, msg_type: str = "") -> None:
         """
@@ -78,7 +96,7 @@ class CfCtrl:
             self._update_tb(self._gui.tb_in_path, str(path))
             self._get_data(path)
         else:
-            self._update_tb(self._gui.tb_out_path, str(path))
+            self._update_tb(self._export_dlg.tb_out_path, str(path))
 
     def _update_tb(self, tb: QLineEdit, text: str) -> None:
         tb.setText(text)
@@ -92,6 +110,7 @@ class CfCtrl:
 
         try:
             self._data = self._model.get_data_from_file(file_path)
+            self._gui.clear_graphs("input")
             self._gui.plot_data(self._data, "input")
             self._update_status(
                 f"Updated plot with data from {file_path.name}")
@@ -101,57 +120,78 @@ class CfCtrl:
 
     def _fit_extrap(self) -> None:
         self._data = self._model.comp_real_stress_strain(self._data)
-        self._gui.plot_data(self._data, "output_1")
         self._data, self._mat_characteristics = self._model.comp_material_data(
-            self._data)
-
+            self._data, self._e_start, self._e_end)
         self._update_status("Material properties calculated.")
+
+        self._fitted_data = self._model.extrapolate(
+            [self._data, self._mat_characteristics[3], self._mat_characteristics[4], 
+             self._mat_characteristics[5], self._mat_characteristics[2]], self._extrap_method)
+        self._update_status("Curve Extrapolated.")
+
+        self._gui.clear_graphs("output_1")
+        self._gui.plot_data(self._data, "output_1")
 
         self._gui.plot_data(
             [self._data["eng_strain"][0:self._mat_characteristics[3]],
                 self._data["eng_strain"][0:self._mat_characteristics[3]]*self._mat_characteristics[0]],
             "output_1", name=f"Youngs Modulus ({self._mat_characteristics[0]:.2f})")
+        
         self._gui.plot_data([self._data["strain"][self._mat_characteristics[3]],
                             self._mat_characteristics[1]], "output_1", "o", name=f"Rp_02 ({self._mat_characteristics[1]:.2f})")
         self._gui.plot_data(
-            [self._data["strain"][self._mat_characteristics[4]], self._mat_characteristics[2]], "output_1", "o", name=f"Rm ({self._mat_characteristics[2]:.2f})")
+            [self._data["strain"][self._mat_characteristics[4]], self._mat_characteristics[2]], 
+            "output_1", "o", name=f"Rm ({self._mat_characteristics[2]:.2f})")
 
+        self._gui.clear_graphs("output_2")
         self._gui.plot_data([self._data["plastic_strain"],
                             self._data["plastic_stress"]], "output_2", name="input data")
-
-        self._fitted_data = self._model.extrapolate(
-            [self._data, self._mat_characteristics[3], self._mat_characteristics[4], self._mat_characteristics[5], self._mat_characteristics[2]], "Swift")
-
         self._gui.plot_data(self._fitted_data, "output_2",
-                            name="Swift-extrapolation")
-
-        self._update_status("Curve Extrapolated.")
+                            name="Extrapolation")
 
     def _export(self):
-        export_dlg = ExportDialog(
+        self._export_dlg = ExportDialog(
             round(self._mat_characteristics[6], 2), self._gui)
-        if export_dlg.exec() == 1:
 
-            title = export_dlg.tb_title.text()
-            mid = export_dlg.tb_mid.text()
-            rho = export_dlg.tb_rho.text()
-            poisons_ratio = export_dlg.tb_poisons_ratio.text()
-            fail = export_dlg.tb_fail.text()
-            point_no = export_dlg.tb_point_no.text()
-            if export_dlg.rdbtn_equi.isChecked() is True:
+        # when the firs btn in the box (Save) is clicked an accepted signal is
+        # emitted since this btn has a acceptive role in the GUI. This signal
+        # is than connected to the accept method of the dialog. Similar is true
+        # for the secend btn which has a rejective role in the GUI
+        self._export_dlg.btnbx.accepted.connect(self._export_dlg.accept)
+        self._export_dlg.btnbx.rejected.connect(self._export_dlg.reject)
+        self._export_dlg.btn_file_out.clicked.connect(
+            partial(self._file_dialog, "*.k"))
+
+        if self._export_dlg.exec() == 1:
+
+            title = self._export_dlg.tb_title.text()
+            mid = self._export_dlg.tb_mid.text()
+            rho = self._export_dlg.tb_rho.text()
+            poisons_ratio = self._export_dlg.tb_poisons_ratio.text()
+            fail = self._export_dlg.tb_fail.text()
+            point_no = int(self._export_dlg.tb_point_no.text())
+            export_path = self._export_dlg.tb_out_path.text()
+            if self._export_dlg.rdbtn_equi.isChecked() is True:
                 spacing = "equi"
             else:
                 spacing = "uneven"
 
             try:
                 self._model.export_data(title, mid, rho, poisons_ratio,
-                                        fail, int(
-                                            point_no), spacing, self._fitted_data,
-                                        self._mat_characteristics[0], self._gui.tb_out_path.text())
-            except ExportPointNoError as error:
+                                        fail, point_no, spacing, self._fitted_data,
+                                        self._mat_characteristics[0], export_path, self._template_path_str)
+                self._update_status(f"Succesfully exported curve to {export_path}.")
+
+            except (ExportPointNoError, FileError) as error:
                 self._update_status(
                     f"{type(error).__name__} - {error.args[0]}", "error")
                 self._export()
 
         else:
-            print("Fail")
+            pass
+
+    def _exit_app(self):
+        sys_exit()
+
+    def _settings(self):
+        
