@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt
 
 
 class ExportDialog(QDialog):
-    def __init__(self, failure_strain=None, parent=None, ):
+    def __init__(self, failure_strain: float=0.0, parent=None):
         super().__init__(parent)
 
         self.setWindowTitle("Export")

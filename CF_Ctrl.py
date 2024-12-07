@@ -10,20 +10,22 @@ from PyQt5.QtWidgets import QLineEdit
 from CF_Gui import CFAppGui
 from CF_Errors import FileError, ExportPointNoError
 from CF_ExportDialog import ExportDialog
+from CF_SettingsDialog import SettingsDialog
 
 
 class CfCtrl:
     def __init__(self, gui: CFAppGui, model):
         self._gui = gui
         self._export_dlg = None
+        self._settings_dlg = None
         self._model = model
         self._data = pd.DataFrame()
         self._fitted_data = []
         self._mat_characteristics = []
         self._extrap_method: str = ""
         self._e_start: int = 0
-        self._e_end: int = 100
-        self._template_path_str:str = ""
+        self._e_end: int = 0
+        self._template_path_str: str = ""
 
         self._read_ini()
         self._connect_signals()
@@ -35,9 +37,24 @@ class CfCtrl:
 
         self._extrap_method = parser.get(
             "extrapolation_fitting", "extrapolation_method")
-        self._e_start: int = parser.getint("extrapolation_fitting", "e_extrap_start")
-        self._e_end: int = parser.getint("extrapolation_fitting", "e_extrap_end")
+        self._e_start: int = parser.getint(
+            "extrapolation_fitting", "e_extrap_start")
+        self._e_end: int = parser.getint(
+            "extrapolation_fitting", "e_extrap_end")
         self._template_path_str: str = parser.get("export", "template_path")
+
+    def _write_ini(self, e_start: str, e_end: str, extrap_method: str,
+                   template_path_str: str) -> None:
+        parser = ConfigParser()
+        parser.read(r"e:\15_MAT24_Curve fitter\CF.ini")
+        parser.set("extrapolation_fitting", "e_extrap_start", e_start)
+        parser.set("extrapolation_fitting", "e_extrap_end", e_end)
+        parser.set("extrapolation_fitting",
+                   "extrapolation_method", extrap_method)
+        parser.set("export", "template_path", template_path_str)
+
+        with open(r"e:\15_MAT24_Curve fitter\CF.ini", "w") as configfile:
+            parser.write(configfile)
 
     def _connect_signals(self):
         # functions (slots) triggered by events (signals) usually need to be
@@ -57,9 +74,9 @@ class CfCtrl:
 
         self._gui.fit_action.triggered.connect(self._fit_extrap)
 
-        self._gui.export_action.triggered.connect(self._export)
-
         self._gui.settings_action.triggered.connect(self._settings)
+
+        self._gui.export_action.triggered.connect(self._export)
 
         self._gui.exit_action.triggered.connect(self._exit_app)
 
@@ -89,14 +106,16 @@ class CfCtrl:
         else:
             self._gui.statusBar().setStyleSheet("background-color : #BDD5E7")
 
-    def _file_dialog(self, file_type: str) -> None:
+    def _file_dialog(self, file_type: str, identifier: str) -> None:
         path, _ = self._gui.file_dialog(file_type)
 
         if file_type == "*.csv":
             self._update_tb(self._gui.tb_in_path, str(path))
             self._get_data(path)
-        else:
+        elif file_type == "*.k" and identifier == "export":
             self._update_tb(self._export_dlg.tb_out_path, str(path))
+        elif file_type == "*.k" and identifier == "setting":
+            self._update_tb(self._settings_dlg.tb_template_path, str(path))
 
     def _update_tb(self, tb: QLineEdit, text: str) -> None:
         tb.setText(text)
@@ -119,15 +138,17 @@ class CfCtrl:
                 f"{type(error).__name__} - {error.args[0]}", "error")
 
     def _fit_extrap(self) -> None:
-        self._data = self._model.comp_real_stress_strain(self._data)
         self._data, self._mat_characteristics = self._model.comp_material_data(
             self._data, self._e_start, self._e_end)
+
+        self._data = self._model.comp_true_stress_strain(
+            self._data, self._mat_characteristics[0], self._mat_characteristics[3], self._mat_characteristics[4])
         self._update_status("Material properties calculated.")
 
         self._fitted_data = self._model.extrapolate(
-            [self._data, self._mat_characteristics[3], self._mat_characteristics[4], 
-             self._mat_characteristics[5], self._mat_characteristics[2]], self._extrap_method)
-        self._update_status("Curve Extrapolated.")
+            [self._data, self._mat_characteristics[3], self._mat_characteristics[4], self._mat_characteristics[0],
+             self._mat_characteristics[5], self._mat_characteristics[0], self._mat_characteristics[2]], self._extrap_method)
+        self._update_status("Yield Curve computed.")
 
         self._gui.clear_graphs("output_1")
         self._gui.plot_data(self._data, "output_1")
@@ -136,16 +157,17 @@ class CfCtrl:
             [self._data["eng_strain"][0:self._mat_characteristics[3]],
                 self._data["eng_strain"][0:self._mat_characteristics[3]]*self._mat_characteristics[0]],
             "output_1", name=f"Youngs Modulus ({self._mat_characteristics[0]:.2f})")
-        
+
         self._gui.plot_data([self._data["strain"][self._mat_characteristics[3]],
                             self._mat_characteristics[1]], "output_1", "o", name=f"Rp_02 ({self._mat_characteristics[1]:.2f})")
         self._gui.plot_data(
-            [self._data["strain"][self._mat_characteristics[4]], self._mat_characteristics[2]], 
+            [self._data["strain"][self._mat_characteristics[4]],
+                self._mat_characteristics[2]],
             "output_1", "o", name=f"Rm ({self._mat_characteristics[2]:.2f})")
 
         self._gui.clear_graphs("output_2")
-        self._gui.plot_data([self._data["plastic_strain"],
-                            self._data["plastic_stress"]], "output_2", name="input data")
+        self._gui.plot_data([self._data["plst_strain"],
+                             self._data["plst_stress"]], "output_2", name="input data")
         self._gui.plot_data(self._fitted_data, "output_2",
                             name="Extrapolation")
 
@@ -160,7 +182,7 @@ class CfCtrl:
         self._export_dlg.btnbx.accepted.connect(self._export_dlg.accept)
         self._export_dlg.btnbx.rejected.connect(self._export_dlg.reject)
         self._export_dlg.btn_file_out.clicked.connect(
-            partial(self._file_dialog, "*.k"))
+            partial(self._file_dialog, "*.k", "export"))
 
         if self._export_dlg.exec() == 1:
 
@@ -180,18 +202,37 @@ class CfCtrl:
                 self._model.export_data(title, mid, rho, poisons_ratio,
                                         fail, point_no, spacing, self._fitted_data,
                                         self._mat_characteristics[0], export_path, self._template_path_str)
-                self._update_status(f"Succesfully exported curve to {export_path}.")
+                self._update_status(
+                    f"Succesfully exported curve to {export_path}.")
 
             except (ExportPointNoError, FileError) as error:
                 self._update_status(
                     f"{type(error).__name__} - {error.args[0]}", "error")
                 self._export()
 
-        else:
-            pass
-
     def _exit_app(self):
         sys_exit()
 
     def _settings(self):
-        
+        extrap_methods = ["Swift", "Voce"]
+        self._settings_dlg = SettingsDialog(extrap_methods, self._e_start,
+                                            self._e_end, self._template_path_str,
+                                            self._gui)
+
+        self._settings_dlg.btnbx.rejected.connect(self._settings_dlg.reject)
+        self._settings_dlg.btnbx.accepted.connect(self._settings_dlg.accept)
+        self._settings_dlg.btn_temp_path.clicked.connect(
+            partial(self._file_dialog, "*.k", "settings"))
+
+        if self._settings_dlg.exec() == 1:
+            self._e_start = int(self._settings_dlg.tb_e_start.text())
+            self._e_end = int(self._settings_dlg.tb_e_end.text())
+            self._extrap_method = self._settings_dlg.cmb_extrap_method.currentText()
+            self._template_path_str = self._settings_dlg.tb_template_path.text()
+
+            self._write_ini(str(self._e_start), str(self._e_end), self._extrap_method,
+                            self._template_path_str)
+
+            self._update_status("New Settings saved.")
+        else:
+            self._update_status("Changed Settings discarded.")

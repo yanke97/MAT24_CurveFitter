@@ -74,7 +74,7 @@ class CFAppGui(QMainWindow):
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.axes_input = self.graph_input.figure.subplots()
-        self.axes_input.set_title("stress - strain (eng.)")
+        self.axes_input.set_title("Stress - Strain (eng.)")
         self.axes_input.grid(True)
 
         self.graph_output_1 = FigureCanvas(plt.figure())
@@ -82,7 +82,7 @@ class CFAppGui(QMainWindow):
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.axes_output_1 = self.graph_output_1.figure.subplots()
-        self.axes_output_1.set_title("stress -straint")
+        self.axes_output_1.set_title("True Stress - True Strain")
         self.axes_output_1.grid(True)
 
         self.graph_output_2 = FigureCanvas(plt.figure())
@@ -90,7 +90,7 @@ class CFAppGui(QMainWindow):
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.axes_output_2 = self.graph_output_2.figure.subplots()
-        self.axes_output_2.set_title("stress - plastic strain")
+        self.axes_output_2.set_title("Yield Curve")
         self.axes_output_2.grid(True)
 
     def _create_tbs(self) -> None:
@@ -120,7 +120,7 @@ class CFAppGui(QMainWindow):
         self.export_action.setIcon(
             QIcon(r"E:\15_MAT24_Curve fitter\00_Daten\file-export.png"))
 
-        self.settings_action = QAction("Settings")
+        self.settings_action = QAction("Settings...")
         self.exit_action = QAction("Exit")
 
     def _create_fonts(self) -> None:
@@ -217,12 +217,12 @@ class CFAppGui(QMainWindow):
         if graph == "input":
             self.axes_input.cla()
             self.axes_input.grid(True)
-            self.axes_input.set_title("stress - strain (eng.)")
+            self.axes_input.set_title("Stress - Strain (eng.)")
         if graph == "output_1":
             self.axes_output_1.cla()
             self.axes_output_1.grid(True)
-            self.axes_output_1.set_title("stress - strain")
+            self.axes_output_1.set_title("True Stress - True Strain")
         if graph == "output_2":
             self.axes_output_2.cla()
             self.axes_output_2.grid(True)
-            self.axes_output_2.set_title("stress - plastic strain")
+            self.axes_output_2.set_title("Yield Curve")

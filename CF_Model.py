@@ -55,21 +55,27 @@ def _get_csv_info(file_path: Path) -> tuple[bool, str]:
         return sniffer.has_header(sample), sniffer.sniff(sample).delimiter
 
 
-def comp_real_stress_strain(df: pd.DataFrame) -> pd.DataFrame:
-    df["strain"] = log(1+(df["eng_strain"]))           # strain [-]
-    df["stress"] = df["eng_stress"]*exp(df["strain"])     # stress [MPa]
+def comp_true_stress_strain(df: pd.DataFrame, E: float, Rp_02_I: int, Rm_I: int) -> pd.DataFrame:
+    print(E, Rp_02_I, Rm_I)
+    df["strain"] = log(1+(df["eng_strain"][0:Rm_I]))           # strain [-]
+    df["stress"] = df["eng_stress"][0:Rm_I] * \
+        exp(df["strain"][0:Rm_I])     # stress [MPa]
+
+    df["plst_strain"] = df["strain"].loc[Rp_02_I:] - (df["strain"][Rp_02_I]/E)
+    df["plst_stress"] = df["stress"].loc[Rp_02_I:]
+
     return df
 
 
 def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> tuple:
     # compute youngs modulus
     res = curve_fit(_hooks_straight,
-                    df["eng_strain"][0:300], df["eng_stress"][e_start:e_end])
+                    df["eng_strain"][e_start:e_end], df["eng_stress"][e_start:e_end])
     E = res[0][0]
 
     # compute Rp_02
     # Compute difference between measurement data and hooks straight
-    difference = df["stress"] - (df["strain"]-0.002)*E
+    difference = df["eng_stress"] - (df["eng_strain"]-0.002)*E
 
     # find the index at which a sing change occurs.
     # This is the point of the intersection.
@@ -81,34 +87,36 @@ def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> tuple:
     # Index of intersection
     Rp_02_I = int(sign_changes[0])
     # Rp_0.2 of the material
-    Rp_02 = df["stress"][Rp_02_I]
-
-    # Compute plastic strain curve
-    df["plastic_strain"] = df["strain"][Rp_02_I::] - df["strain"][Rp_02_I]
-    df["plastic_stress"] = df["stress"][Rp_02_I::]
+    Rp_02 = df["eng_stress"][Rp_02_I]
 
     # Compute Failure strain A_5
-    # Compute pandas series with stress drops
-    stress_drop = pd.Series(df["plastic_stress"].diff())
-    A_5_I = stress_drop.idxmin()-1
-    A_5 = df["plastic_strain"][A_5_I]
+    if df["eng_stress"].iloc[-1] > 50:
+        A_5_I = df["eng_strain"].index[-1]
+
+    else:
+        # Compute pandas series with stress drops
+        stress_drop = pd.Series(df["eng_stress"].diff())
+        A_5_I = stress_drop.idxmin()-1
+
+    Af = (df["eng_strain"][A_5_I]) - (df["eng_stress"][A_5_I]/E)
 
     # Rm of the material
-    Rm_I = df["stress"].idxmax()
-    Rm = df["stress"][Rm_I]
-    Ag = (df["strain"][Rm_I]) - (Rm/E)
+    Rm_I = df["eng_stress"].idxmax()
+    Rm = df["eng_stress"][Rm_I]
+    Ag = (df["eng_strain"][Rm_I]) - (Rm/E)
 
-    return df, [E, Rp_02, Rm, Rp_02_I, Rm_I, Ag, A_5]
+    return df, [E, Rp_02, Rm, Rp_02_I, Rm_I, Ag, Af]
 
 
 def extrapolate(data: list, extrap_type: str) -> list:
     df = data[0]
     start_index = data[1]
     end_index = data[2]
+    E = data[3]
 
     if extrap_type == "Swift":
-        Ag = data[3]
-        Rm = data[4]
+        Ag = data[4]
+        Rm = data[5]
 
         n_0 = mlog(Ag+1)
         c_0 = Rm*(e/n_0)**n_0
@@ -116,8 +124,8 @@ def extrapolate(data: list, extrap_type: str) -> list:
 
         initial_guess = [c_0, phi_0, n_0]
 
-        res = curve_fit(_swift_extrapolation,
-                        df["strain"][start_index:end_index]-df["strain"][start_index], df["stress"][start_index:end_index], initial_guess)
+        res = curve_fit(_swift_extrapolation, df["plst_strain"][start_index:end_index],
+                        df["plst_stress"][start_index:end_index], initial_guess)
 
         c = res[0][0]
         phi = res[0][1]
@@ -132,7 +140,7 @@ def extrapolate(data: list, extrap_type: str) -> list:
 
 
 def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, point_no: int,
-                spacing: str, fitted_data: list[list], E: str, path_str: str, template_path_str:str) -> Path:
+                spacing: str, fitted_data: list[list], E: str, path_str: str, template_path_str: str) -> Path:
     if int(point_no) > 100:
         raise ExportPointNoError from None
     else:
@@ -183,7 +191,7 @@ def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, p
         return path
 
 
-def write_to_file(data: dict, path_str: str, template_path_str:str) -> None:
+def write_to_file(data: dict, path_str: str, template_path_str: str) -> None:
     template_path = Path(template_path_str)
     path: Path = Path(path_str.replace("\"", ""))
 
@@ -193,12 +201,12 @@ def write_to_file(data: dict, path_str: str, template_path_str:str) -> None:
 
             with open(template_path, "r") as template, open(path, "w") as file:
                 mat_card_content: str = LsDynaTemplate(
-                        template.read()).substitute(data)
-                
+                    template.read()).substitute(data)
+
                 file.writelines(mat_card_content)
 
         else:
             raise FileError(path) from None
-    
+
     else:
         raise TemplateError(template_path) from None
