@@ -37,8 +37,7 @@ class CFAppGui(QMainWindow):
         self.setCentralWidget(self._central_widget)
 
         self._layout_graphs.addWidget(self.graph_input, 0, 0, 2, 1)
-        self._layout_graphs.addWidget(self.graph_output_1, 0, 1)
-        self._layout_graphs.addWidget(self.graph_output_2, 1, 1)
+        self._layout_graphs.addWidget(self.graph_output, 0, 1)
 
         self._tool_bar.addAction(self.import_action)
         self._tool_bar.addAction(self.fit_action)
@@ -77,19 +76,11 @@ class CFAppGui(QMainWindow):
         self.axes_input.set_title("Stress - Strain (eng.)")
         self.axes_input.grid(True)
 
-        self.graph_output_1 = FigureCanvas(plt.figure())
-        self.graph_output_1.setSizePolicy(
+        self.graph_output = FigureCanvas(plt.figure())
+        self.graph_output.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.axes_output_1 = self.graph_output_1.figure.subplots()
-        self.axes_output_1.set_title("True Stress - True Strain")
-        self.axes_output_1.grid(True)
-
-        self.graph_output_2 = FigureCanvas(plt.figure())
-        self.graph_output_2.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        self.axes_output_2 = self.graph_output_2.figure.subplots()
+        self.axes_output_2 = self.graph_output.figure.subplots()
         self.axes_output_2.set_title("Yield Curve")
         self.axes_output_2.grid(True)
 
@@ -193,36 +184,19 @@ class CFAppGui(QMainWindow):
             self.axes_input.set_ylim(0)
             self.graph_input.draw_idle()
 
-        elif type(data) == pd.DataFrame and graph == "output_1":
-            self.axes_output_1.plot(
-                data["strain"], data["stress"], line_type, label=name)
-            self.axes_output_1.set_xlim(0)
-            self.axes_output_1.set_ylim(0)
-            self.axes_output_1.legend()
-            self.graph_output_1.draw_idle()
-
-        elif type(data) == list and graph == "output_1":
-            self.axes_output_1.plot(data[0], data[1], line_type, label=name)
-            self.axes_output_1.legend()
-            self.graph_output_1.draw_idle()
-
-        elif type(data) == list and graph == "output_2":
-            self.axes_output_2.plot(data[0], data[1], line_type, label=name)
-            self.axes_output_2.set_xlim(0, 1.2)
-            self.axes_output_2.set_ylim(0, (data[1].max())*1.2)
-            self.axes_output_2.legend()
-            self.graph_output_2.draw_idle()
+        elif type(data) == list and graph == "output":
+            self.axes_output.plot(data[0], data[1], line_type, label=name)
+            self.axes_output.set_xlim(0, 1.2)
+            self.axes_output.set_ylim(0, (data[1].max())*1.2)
+            self.axes_output.legend()
+            self.graph_output.draw_idle()
 
     def clear_graphs(self, graph: str) -> None:
         if graph == "input":
             self.axes_input.cla()
             self.axes_input.grid(True)
             self.axes_input.set_title("Stress - Strain (eng.)")
-        if graph == "output_1":
-            self.axes_output_1.cla()
-            self.axes_output_1.grid(True)
-            self.axes_output_1.set_title("True Stress - True Strain")
-        if graph == "output_2":
-            self.axes_output_2.cla()
-            self.axes_output_2.grid(True)
-            self.axes_output_2.set_title("Yield Curve")
+        if graph == "output":
+            self.axes_output.cla()
+            self.axes_output.grid(True)
+            self.axes_output.set_title("Yield Curve")

@@ -1,9 +1,8 @@
 import pandas as pd
 from pathlib import Path
 from csv import Sniffer
-from numpy import (log, exp, where, sign, diff, linspace)
-from numpy import round as nround
-from math import log as mlog, e
+import numpy as np
+from math import log, e
 from scipy.optimize import curve_fit
 from string import Template
 
@@ -25,6 +24,14 @@ def _hooks_straight(x, m) -> float:
 
 def _swift_extrapolation(x, c, phi, n) -> float:
     return c*(phi+x)**n
+
+
+def _voce_extrapolation(x, sigma, R, B) -> float:
+    return sigma + R*(1-np.exp(-B*x))
+
+
+def _swift_voce_extrapolation(x, alpha, c, phi, n, sigma, R, B) -> float:
+    return alpha*(c*(phi+x)**n) + (1-alpha)*(sigma + R*(1-np.exp(-B*x)))
 
 
 def get_data_from_file(file_path: Path) -> pd.DataFrame:
@@ -55,19 +62,18 @@ def _get_csv_info(file_path: Path) -> tuple[bool, str]:
         return sniffer.has_header(sample), sniffer.sniff(sample).delimiter
 
 
-def comp_true_stress_strain(df: pd.DataFrame, E: float, Rp_02_I: int, Rm_I: int) -> pd.DataFrame:
-    print(E, Rp_02_I, Rm_I)
-    df["strain"] = log(1+(df["eng_strain"][0:Rm_I]))           # strain [-]
+def comp_true_stress_strain(df: pd.DataFrame, Rp_02_I: int, Rm_I: int) -> pd.DataFrame:
+    df["strain"] = np.log(1+(df["eng_strain"][0:Rm_I]))           # strain [-]
     df["stress"] = df["eng_stress"][0:Rm_I] * \
-        exp(df["strain"][0:Rm_I])     # stress [MPa]
+        np.exp(df["strain"][0:Rm_I])     # stress [MPa]
 
-    df["plst_strain"] = df["strain"].loc[Rp_02_I:] - (df["strain"][Rp_02_I]/E)
+    df["plst_strain"] = df["strain"].loc[Rp_02_I:] - df["strain"][Rp_02_I]
     df["plst_stress"] = df["stress"].loc[Rp_02_I:]
 
     return df
 
 
-def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> tuple:
+def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> list[float]:
     # compute youngs modulus
     res = curve_fit(_hooks_straight,
                     df["eng_strain"][e_start:e_end], df["eng_stress"][e_start:e_end])
@@ -77,15 +83,7 @@ def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> tuple:
     # Compute difference between measurement data and hooks straight
     difference = df["eng_stress"] - (df["eng_strain"]-0.002)*E
 
-    # find the index at which a sing change occurs.
-    # This is the point of the intersection.
-    # np.sign writes -1 for negative index and 1 for positive index
-    # np.diff writes a non zero value where the sign in the array changes
-    # np.where returns the index
-    sign_changes = where(diff(sign(difference)))[0]
-
-    # Index of intersection
-    Rp_02_I = int(sign_changes[0])
+    Rp_02_I = np.abs(difference).argmin()
     # Rp_0.2 of the material
     Rp_02 = df["eng_stress"][Rp_02_I]
 
@@ -105,20 +103,26 @@ def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> tuple:
     Rm = df["eng_stress"][Rm_I]
     Ag = (df["eng_strain"][Rm_I]) - (Rm/E)
 
-    return df, [E, Rp_02, Rm, Rp_02_I, Rm_I, Ag, Af]
+    return [E, Rp_02, Rm, Rp_02_I, Rm_I, Ag, Af]
 
 
-def extrapolate(data: list, extrap_type: str) -> list:
+def extrapolate(data: list, extrap_type: int, end: int = 1, resolution: int = 100) -> list:
     df = data[0]
     start_index = data[1]
     end_index = data[2]
-    E = data[3]
 
-    if extrap_type == "Swift":
-        Ag = data[4]
-        Rm = data[5]
+    if end == 1:
+        extrap_strain = pd.Series(np.linspace(0, end, resolution))
+    else:
+        extrap_strain = pd.Series(
+            np.linspace(0, df["plst_strain"][end-1], resolution))
 
-        n_0 = mlog(Ag+1)
+    if extrap_type == 0:
+        # Swift extrapolation
+        Ag = data[3]
+        Rm = data[4]
+
+        n_0 = log(Ag+1)
         c_0 = Rm*(e/n_0)**n_0
         phi_0 = 0.1
 
@@ -127,15 +131,68 @@ def extrapolate(data: list, extrap_type: str) -> list:
         res = curve_fit(_swift_extrapolation, df["plst_strain"][start_index:end_index],
                         df["plst_stress"][start_index:end_index], initial_guess)
 
-        c = res[0][0]
-        phi = res[0][1]
-        n = res[0][2]
+        parameter = res[0]
 
-        extrap_strain = pd.Series(linspace(0, 1, 100))
-        extrap_stress = _swift_extrapolation(extrap_strain, c, phi, n)
+        extrap_stress = _swift_extrapolation(
+            extrap_strain, parameter[0], parameter[1], parameter[2])
 
-        result = [extrap_strain, extrap_stress]
+    elif extrap_type == 1:
+        # Voce
+        sigma_0 = df["plst_stress"][start_index]
+        R_0 = df["plst_stress"].max()-sigma_0
 
+        eps_50 = df["plst_strain"][abs(
+            df["plst_stress"]-(sigma_0+0.5*R_0)).argmin()]
+        B_0 = 1/eps_50
+
+        initial_guess = [sigma_0, R_0, B_0]
+
+        res = curve_fit(_voce_extrapolation, df["plst_strain"][start_index:end_index],
+                        df["plst_stress"][start_index:end_index], initial_guess)
+
+        parameter = res[0]
+
+        extrap_stress = _voce_extrapolation(
+            extrap_strain, parameter[0], parameter[1], parameter[2])
+
+    elif extrap_type == 2:
+        # Combined Swift Voce
+
+        # Get swift and Voce curves with respective parameter
+        _, swift_stress, swift_parameter = extrapolate(
+            data, 0, end_index, end_index-start_index)
+        _, voce_stress, voce_parameter = extrapolate(
+            data, 1, end_index, end_index-start_index)
+
+        # The numerator quantifies how well the difference between the Swift and Voce models
+        # (Swift - Voce) aligns with the residuals of the Voce model (measured - Voce).
+        # A larger numerator indicates that the Swift model improves upon the Voce model
+        # in regions where the Voce model deviates from the measured data.
+        numerator = np.sum((df["plst_stress"][start_index:end_index].values-voce_stress.values)
+                           * (swift_stress-voce_stress))
+
+        # The denominator represents the magnitude of the difference between the Swift
+        # and Voce models (Swift - Voce) across the overlapping region. It normalizes
+        # the calculation of the weighing factor (alpha) to ensure that the weighting
+        # accounts for how distinct the two models are from each other.
+        denominator = np.sum((swift_stress-voce_stress)**2)
+
+        if denominator < 0.0001:
+            alpha = 0.5
+        elif abs(numerator)/denominator > 10:
+            alpha = 0.5
+        else:
+            alpha = np.clip(abs(numerator)/denominator, 0, 1)
+
+        parameter = [alpha]
+        parameter.extend(swift_parameter)
+        parameter.extend(voce_parameter)
+
+        extrap_stress = _swift_voce_extrapolation(
+            extrap_strain, parameter[0], parameter[1], parameter[2], parameter[3],
+            parameter[4], parameter[5], parameter[6])
+
+    result = [extrap_strain, extrap_stress, parameter]
     return result
 
 
@@ -144,27 +201,27 @@ def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, p
     if int(point_no) > 100:
         raise ExportPointNoError from None
     else:
-        export_data: dict = {}
-        export_data["Title"] = title
-        export_data["mid"] = mid.rjust(10)
-        export_data["ro"] = rho.rjust(10)
-        export_data["E"] = str(round(E, 2)).rjust(10)
-        export_data["pr"] = poisons_ratio.rjust(10)
-        export_data["fail"] = fail.rjust(10)
+        np.export_data: dict = {}
+        np.export_data["Title"] = title
+        np.export_data["mid"] = mid.rjust(10)
+        np.export_data["ro"] = rho.rjust(10)
+        np.export_data["E"] = str(round(E, 2)).rjust(10)
+        np.export_data["pr"] = poisons_ratio.rjust(10)
+        np.export_data["fail"] = fail.rjust(10)
 
         if spacing == "equi" or point_no == 100:
-            ids = linspace(0, 99, point_no)
+            ids = np.linspace(0, 99, point_no)
 
         else:
             point_no_1 = round(point_no*0.6)
             point_no_2 = point_no - point_no_1
 
-            ids_1 = linspace(0, 50, point_no_1)
-            ids_1 = nround(ids_1).astype(int)
+            ids_1 = np.linspace(0, 50, point_no_1)
+            ids_1 = np.round(ids_1).astype(int)
             ids = set(ids_1)
 
-            ids_2 = linspace(51, 99, point_no_2)
-            ids_2 = nround(ids_2).astype(int)
+            ids_2 = np.linspace(51, 99, point_no_2)
+            ids_2 = np.round(ids_2).astype(int)
 
             ids.update(ids_2)
 
@@ -172,8 +229,8 @@ def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, p
             key_a = f"a{j+1}"
             key_o = f"o{j+1}"
 
-            export_data[key_a] = str(round(fitted_data[0][i], 3)).rjust(20)
-            export_data[key_o] = str(round(fitted_data[1][i], 3)).rjust(20)
+            np.export_data[key_a] = str(round(fitted_data[0][i], 3)).rjust(20)
+            np.export_data[key_o] = str(round(fitted_data[1][i], 3)).rjust(20)
 
         j += 1
 
@@ -181,12 +238,12 @@ def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, p
             key_a = f"a{j+1}"
             key_o = f"o{j+1}"
 
-            export_data[key_a] = "$"
-            export_data[key_o] = "$"
+            np.export_data[key_a] = "$"
+            np.export_data[key_o] = "$"
 
             j += 1
 
-        path: Path = write_to_file(export_data, path_str, template_path_str)
+        path: Path = write_to_file(np.export_data, path_str, template_path_str)
 
         return path
 

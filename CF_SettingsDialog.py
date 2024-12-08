@@ -4,7 +4,7 @@ from PyQt5.QtGui import (QFont, QIcon)
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, extrap_methods: list[str], e_start: int, e_end: int,
+    def __init__(self, extrap_methods: list[str], extrap_index: int, e_start: int, e_end: int,
                  template_path_str: str, parent=None):
         super().__init__(parent)
 
@@ -14,7 +14,7 @@ class SettingsDialog(QDialog):
         self._create_btns()
         self._create_lbls()
         self._create_tbs(e_start, e_end, template_path_str)
-        self._create_cmbs(extrap_methods)
+        self._create_cmbs(extrap_methods, extrap_index)
         self._create_line()
         self._create_spacers()
         self._layout = QFormLayout()
@@ -74,11 +74,12 @@ class SettingsDialog(QDialog):
         self.tb_template_path.setFont(self._font)
         self.tb_template_path.setFixedSize(200, 25)
 
-    def _create_cmbs(self, extrap_methods: list[str]) -> None:
+    def _create_cmbs(self, extrap_methods: list[str], extrap_index:int) -> None:
         self.cmb_extrap_method = QComboBox()
         self.cmb_extrap_method.setFixedSize(175, 25)
         self.cmb_extrap_method.setFont(self._font)
         self.cmb_extrap_method.addItems(extrap_methods)
+        self.cmb_extrap_method.setCurrentIndex(extrap_index)
 
     def _create_fonts(self) -> None:
         self._title_font = QFont("Calibri", 12, QFont.Bold)

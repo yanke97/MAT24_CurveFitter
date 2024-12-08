@@ -35,7 +35,7 @@ class CfCtrl:
         parser = ConfigParser()
         parser.read(r"e:\15_MAT24_Curve fitter\CF.ini")
 
-        self._extrap_method = parser.get(
+        self._extrap_method: int = parser.getint(
             "extrapolation_fitting", "extrapolation_method")
         self._e_start: int = parser.getint(
             "extrapolation_fitting", "e_extrap_start")
@@ -138,17 +138,19 @@ class CfCtrl:
                 f"{type(error).__name__} - {error.args[0]}", "error")
 
     def _fit_extrap(self) -> None:
-        self._data, self._mat_characteristics = self._model.comp_material_data(
+        self._mat_characteristics = self._model.comp_material_data(
             self._data, self._e_start, self._e_end)
 
         self._data = self._model.comp_true_stress_strain(
-            self._data, self._mat_characteristics[0], self._mat_characteristics[3], self._mat_characteristics[4])
+            self._data, self._mat_characteristics[3], self._mat_characteristics[4])
         self._update_status("Material properties calculated.")
 
         self._fitted_data = self._model.extrapolate(
-            [self._data, self._mat_characteristics[3], self._mat_characteristics[4], self._mat_characteristics[0],
-             self._mat_characteristics[5], self._mat_characteristics[0], self._mat_characteristics[2]], self._extrap_method)
+            [self._data, self._mat_characteristics[3], self._mat_characteristics[4],
+             self._mat_characteristics[5], self._mat_characteristics[2]], self._extrap_method)
         self._update_status("Yield Curve computed.")
+
+        print(self._fitted_data[2])
 
         self._gui.clear_graphs("output_1")
         self._gui.plot_data(self._data, "output_1")
@@ -158,17 +160,10 @@ class CfCtrl:
                 self._data["eng_strain"][0:self._mat_characteristics[3]]*self._mat_characteristics[0]],
             "output_1", name=f"Youngs Modulus ({self._mat_characteristics[0]:.2f})")
 
-        self._gui.plot_data([self._data["strain"][self._mat_characteristics[3]],
-                            self._mat_characteristics[1]], "output_1", "o", name=f"Rp_02 ({self._mat_characteristics[1]:.2f})")
-        self._gui.plot_data(
-            [self._data["strain"][self._mat_characteristics[4]],
-                self._mat_characteristics[2]],
-            "output_1", "o", name=f"Rm ({self._mat_characteristics[2]:.2f})")
-
         self._gui.clear_graphs("output_2")
         self._gui.plot_data([self._data["plst_strain"],
-                             self._data["plst_stress"]], "output_2", name="input data")
-        self._gui.plot_data(self._fitted_data, "output_2",
+                             self._data["plst_stress"]], "output", name="input data")
+        self._gui.plot_data(self._fitted_data, "output",
                             name="Extrapolation")
 
     def _export(self):
@@ -214,8 +209,8 @@ class CfCtrl:
         sys_exit()
 
     def _settings(self):
-        extrap_methods = ["Swift", "Voce"]
-        self._settings_dlg = SettingsDialog(extrap_methods, self._e_start,
+        extrap_methods = ["Swift", "Voce", "Swift-Voce"]
+        self._settings_dlg = SettingsDialog(extrap_methods, self._extrap_method, self._e_start,
                                             self._e_end, self._template_path_str,
                                             self._gui)
 
@@ -227,10 +222,10 @@ class CfCtrl:
         if self._settings_dlg.exec() == 1:
             self._e_start = int(self._settings_dlg.tb_e_start.text())
             self._e_end = int(self._settings_dlg.tb_e_end.text())
-            self._extrap_method = self._settings_dlg.cmb_extrap_method.currentText()
+            self._extrap_method = self._settings_dlg.cmb_extrap_method.currentIndex()
             self._template_path_str = self._settings_dlg.tb_template_path.text()
 
-            self._write_ini(str(self._e_start), str(self._e_end), self._extrap_method,
+            self._write_ini(str(self._e_start), str(self._e_end), str(self._extrap_method),
                             self._template_path_str)
 
             self._update_status("New Settings saved.")
