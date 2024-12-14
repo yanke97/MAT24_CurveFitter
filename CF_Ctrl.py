@@ -8,7 +8,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import QLineEdit
 
 from CF_Gui import CFAppGui
-from CF_Errors import FileError, ExportPointNoError
+from CF_Errors import FileError, ExportPointNoError, DataError
 from CF_ExportDialog import ExportDialog
 from CF_SettingsDialog import SettingsDialog
 
@@ -133,77 +133,86 @@ class CfCtrl:
             self._gui.plot_data(self._data, "input")
             self._update_status(
                 f"Updated plot with data from {file_path.name}")
-        except FileError as error:
+        except (FileError, DataError) as error:
             self._update_status(
                 f"{type(error).__name__} - {error.args[0]}", "error")
 
     def _fit_extrap(self) -> None:
-        self._mat_characteristics = self._model.comp_material_data(
-            self._data, self._e_start, self._e_end)
+        if self._data.empty:
+            self._update_status("No data found, please import data.", "error")
 
-        self._data = self._model.comp_true_stress_strain(
-            self._data, self._mat_characteristics[3], self._mat_characteristics[4])
-        self._update_status("Material properties calculated.")
-
-        self._fitted_data = self._model.extrapolate(
-            [self._data, self._mat_characteristics[3], self._mat_characteristics[4],
-             self._mat_characteristics[5], self._mat_characteristics[2]], self._extrap_method)
-        self._update_status("Yield Curve computed.")
-
-        print(self._fitted_data[2])
-
-        self._gui.clear_graphs("output_1")
-        self._gui.plot_data(self._data, "output_1")
-
-        self._gui.plot_data(
-            [self._data["eng_strain"][0:self._mat_characteristics[3]],
-                self._data["eng_strain"][0:self._mat_characteristics[3]]*self._mat_characteristics[0]],
-            "output_1", name=f"Youngs Modulus ({self._mat_characteristics[0]:.2f})")
-
-        self._gui.clear_graphs("output_2")
-        self._gui.plot_data([self._data["plst_strain"],
-                             self._data["plst_stress"]], "output", name="input data")
-        self._gui.plot_data(self._fitted_data, "output",
-                            name="Extrapolation")
+        else:
+            self._mat_characteristics = self._model.comp_material_data(
+                self._data, self._e_start, self._e_end)
+    
+            self._data = self._model.comp_true_stress_strain(
+                self._data, self._mat_characteristics[3], self._mat_characteristics[4])
+            self._update_status("Material properties calculated.")
+    
+            self._fitted_data = self._model.extrapolate(
+                [self._data, self._mat_characteristics[3], self._mat_characteristics[4],
+                 self._mat_characteristics[5], self._mat_characteristics[2]], self._extrap_method)
+            self._update_status("Yield Curve computed.")
+    
+            self._gui.fill_lbls(self._mat_characteristics,
+                                self._extrap_method, self._fitted_data[2])
+    
+            self._gui.clear_graphs("output_1")
+            self._gui.plot_data(self._data, "output_1")
+    
+            self._gui.plot_data(
+                [self._data["eng_strain"][0:self._mat_characteristics[3]],
+                    self._data["eng_strain"][0:self._mat_characteristics[3]]*self._mat_characteristics[0]],
+                "output_1", name=f"Youngs Modulus ({self._mat_characteristics[0]:.2f})")
+    
+            self._gui.clear_graphs("output")
+            self._gui.plot_data([self._data["plst_strain"],
+                                 self._data["plst_stress"]], "output", name="Input Data")
+            self._gui.plot_data(self._fitted_data, "output",
+                                name="Fitted Yield Curve")
 
     def _export(self):
-        self._export_dlg = ExportDialog(
-            round(self._mat_characteristics[6], 2), self._gui)
+        if not self._mat_characteristics:
+            self._update_status("No Data to Export.", "error")
 
-        # when the firs btn in the box (Save) is clicked an accepted signal is
-        # emitted since this btn has a acceptive role in the GUI. This signal
-        # is than connected to the accept method of the dialog. Similar is true
-        # for the secend btn which has a rejective role in the GUI
-        self._export_dlg.btnbx.accepted.connect(self._export_dlg.accept)
-        self._export_dlg.btnbx.rejected.connect(self._export_dlg.reject)
-        self._export_dlg.btn_file_out.clicked.connect(
-            partial(self._file_dialog, "*.k", "export"))
+        else:
+            self._export_dlg = ExportDialog(
+                round(self._mat_characteristics[6], 2), self._gui)
 
-        if self._export_dlg.exec() == 1:
+            # when the firs btn in the box (Save) is clicked an accepted signal is
+            # emitted since this btn has a acceptive role in the GUI. This signal
+            # is than connected to the accept method of the dialog. Similar is true
+            # for the secend btn which has a rejective role in the GUI
+            self._export_dlg.btnbx.accepted.connect(self._export_dlg.accept)
+            self._export_dlg.btnbx.rejected.connect(self._export_dlg.reject)
+            self._export_dlg.btn_file_out.clicked.connect(
+                partial(self._file_dialog, "*.k", "export"))
 
-            title = self._export_dlg.tb_title.text()
-            mid = self._export_dlg.tb_mid.text()
-            rho = self._export_dlg.tb_rho.text()
-            poisons_ratio = self._export_dlg.tb_poisons_ratio.text()
-            fail = self._export_dlg.tb_fail.text()
-            point_no = int(self._export_dlg.tb_point_no.text())
-            export_path = self._export_dlg.tb_out_path.text()
-            if self._export_dlg.rdbtn_equi.isChecked() is True:
-                spacing = "equi"
-            else:
-                spacing = "uneven"
+            if self._export_dlg.exec() == 1:
 
-            try:
-                self._model.export_data(title, mid, rho, poisons_ratio,
-                                        fail, point_no, spacing, self._fitted_data,
-                                        self._mat_characteristics[0], export_path, self._template_path_str)
-                self._update_status(
-                    f"Succesfully exported curve to {export_path}.")
+                title = self._export_dlg.tb_title.text()
+                mid = self._export_dlg.tb_mid.text()
+                rho = self._export_dlg.tb_rho.text()
+                poisons_ratio = self._export_dlg.tb_poisons_ratio.text()
+                fail = self._export_dlg.tb_fail.text()
+                point_no = int(self._export_dlg.tb_point_no.text())
+                export_path = self._export_dlg.tb_out_path.text()
+                if self._export_dlg.rdbtn_equi.isChecked() is True:
+                    spacing = "equi"
+                else:
+                    spacing = "uneven"
 
-            except (ExportPointNoError, FileError) as error:
-                self._update_status(
-                    f"{type(error).__name__} - {error.args[0]}", "error")
-                self._export()
+                try:
+                    self._model.export_data(title, mid, rho, poisons_ratio,
+                                            fail, point_no, spacing, self._fitted_data,
+                                            self._mat_characteristics[0], export_path, self._template_path_str)
+                    self._update_status(
+                        f"Succesfully exported curve to {export_path}.")
+
+                except (ExportPointNoError, FileError) as error:
+                    self._update_status(
+                        f"{type(error).__name__} - {error.args[0]}", "error")
+                    self._export()
 
     def _exit_app(self):
         sys_exit()
@@ -220,14 +229,19 @@ class CfCtrl:
             partial(self._file_dialog, "*.k", "settings"))
 
         if self._settings_dlg.exec() == 1:
-            self._e_start = int(self._settings_dlg.tb_e_start.text())
-            self._e_end = int(self._settings_dlg.tb_e_end.text())
-            self._extrap_method = self._settings_dlg.cmb_extrap_method.currentIndex()
-            self._template_path_str = self._settings_dlg.tb_template_path.text()
+            if int(self._settings_dlg.tb_e_end.text()) - int(self._settings_dlg.tb_e_start.text()) < 50:
+                self._update_status(
+                    "It is recommended to use at least 50 data points to fit the Youngs Modulus. Changes discarded.", "error")
+                self._settings()
+            else:
+                self._e_start = int(self._settings_dlg.tb_e_start.text())
+                self._e_end = int(self._settings_dlg.tb_e_end.text())
+                self._extrap_method = self._settings_dlg.cmb_extrap_method.currentIndex()
+                self._template_path_str = self._settings_dlg.tb_template_path.text()
 
-            self._write_ini(str(self._e_start), str(self._e_end), str(self._extrap_method),
-                            self._template_path_str)
+                self._write_ini(str(self._e_start), str(self._e_end), str(self._extrap_method),
+                                self._template_path_str)
 
-            self._update_status("New Settings saved.")
+                self._update_status("New Settings saved.")
         else:
             self._update_status("Changed Settings discarded.")

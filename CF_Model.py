@@ -6,7 +6,7 @@ from math import log, e
 from scipy.optimize import curve_fit
 from string import Template
 
-from CF_Errors import FileError, ExportPointNoError, TemplateError
+from CF_Errors import FileError, ExportPointNoError, TemplateError, DataError
 
 
 class LsDynaTemplate(Template):
@@ -37,19 +37,23 @@ def _swift_voce_extrapolation(x, alpha, c, phi, n, sigma, R, B) -> float:
 def get_data_from_file(file_path: Path) -> pd.DataFrame:
     if file_path.is_file() is True:
         header, delimiter = _get_csv_info(file_path)
-        col_names = ["eng_strain", "eng_stress"]
 
         if header is True:
             df = pd.read_csv(file_path, delimiter=delimiter,
-                             header=0, names=col_names)
+                             header=0)
         else:
             df = pd.read_csv(file_path, delimiter=delimiter,
-                             header=None, names=col_names)
+                             header=None)
+        
+        if df.shape[1] != 2:
+            raise DataError(df.shape[1]) from None
+        else:
+            df.set_axis(["eng_strain", "eng_stress"], axis="columns", inplace=True)
 
-        df["eng_strain"] = df["eng_strain"] - df["eng_strain"][0]
-        df["eng_stress"] = df["eng_stress"] - df["eng_stress"][0]
+            df["eng_strain"] = df["eng_strain"] - df["eng_strain"][0]
+            df["eng_stress"] = df["eng_stress"] - df["eng_stress"][0]
 
-        return df
+            return df
     else:
         raise FileError(file_path) from None
 
@@ -112,7 +116,7 @@ def extrapolate(data: list, extrap_type: int, end: int = 1, resolution: int = 10
     end_index = data[2]
 
     if end == 1:
-        extrap_strain = pd.Series(np.linspace(0, end, resolution))
+        extrap_strain = pd.Series(np.linspace(0, end, resolution+1))
     else:
         extrap_strain = pd.Series(
             np.linspace(0, df["plst_strain"][end-1], resolution))
@@ -198,19 +202,21 @@ def extrapolate(data: list, extrap_type: int, end: int = 1, resolution: int = 10
 
 def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, point_no: int,
                 spacing: str, fitted_data: list[list], E: str, path_str: str, template_path_str: str) -> Path:
-    if int(point_no) > 100:
+    if int(point_no) > 100 or int(point_no) < 2:
         raise ExportPointNoError from None
     else:
-        np.export_data: dict = {}
-        np.export_data["Title"] = title
-        np.export_data["mid"] = mid.rjust(10)
-        np.export_data["ro"] = rho.rjust(10)
-        np.export_data["E"] = str(round(E, 2)).rjust(10)
-        np.export_data["pr"] = poisons_ratio.rjust(10)
-        np.export_data["fail"] = fail.rjust(10)
+        export_data: dict = {}
+        export_data["Title"] = title
+        export_data["mid"] = mid.rjust(10)
+        export_data["ro"] = rho.rjust(10)
+        export_data["E"] = str(round(E, 2)).rjust(10)
+        export_data["pr"] = poisons_ratio.rjust(10)
+        export_data["fail"] = fail.rjust(10)
+
+        print(point_no)
 
         if spacing == "equi" or point_no == 100:
-            ids = np.linspace(0, 99, point_no)
+            ids = np.linspace(0, 100, point_no+1)
 
         else:
             point_no_1 = round(point_no*0.6)
@@ -220,30 +226,30 @@ def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, p
             ids_1 = np.round(ids_1).astype(int)
             ids = set(ids_1)
 
-            ids_2 = np.linspace(51, 99, point_no_2)
+            ids_2 = np.linspace(51, 100, point_no_2)
             ids_2 = np.round(ids_2).astype(int)
 
             ids.update(ids_2)
 
         for j, i in enumerate(ids):
-            key_a = f"a{j+1}"
-            key_o = f"o{j+1}"
+            key_a = f"a{j}"
+            key_o = f"o{j}"
 
-            np.export_data[key_a] = str(round(fitted_data[0][i], 3)).rjust(20)
-            np.export_data[key_o] = str(round(fitted_data[1][i], 3)).rjust(20)
+            export_data[key_a] = str(round(fitted_data[0][i], 3)).rjust(20)
+            export_data[key_o] = str(round(fitted_data[1][i], 3)).rjust(20)
 
         j += 1
 
-        while j+1 <= 100:
-            key_a = f"a{j+1}"
-            key_o = f"o{j+1}"
+        while j <= 101:
+            key_a = f"a{j}"
+            key_o = f"o{j}"
 
-            np.export_data[key_a] = "$"
-            np.export_data[key_o] = "$"
+            export_data[key_a] = "$"
+            export_data[key_o] = "$"
 
             j += 1
 
-        path: Path = write_to_file(np.export_data, path_str, template_path_str)
+        path: Path = write_to_file(export_data, path_str, template_path_str)
 
         return path
 

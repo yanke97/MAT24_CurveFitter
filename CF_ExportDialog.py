@@ -61,7 +61,7 @@ class ExportDialog(QDialog):
         self._lbl_point_no.setFont(self._font)
 
     def _create_tbs(self, failure_strain) -> None:
-        self.tb_title = QLineEdit("Tet")
+        self.tb_title = QLineEdit("Test")
         self.tb_title.setFont(self._font)
         self.tb_mid = QLineEdit("20000000")
         self.tb_mid.setFont(self._font)
@@ -72,7 +72,7 @@ class ExportDialog(QDialog):
         self.tb_fail = QLineEdit(f"{failure_strain}")
         self.tb_fail.setFont(self._font)
 
-        self.tb_point_no = QLineEdit("50")
+        self.tb_point_no = QLineEdit("100")
         self.tb_point_no.setFont(self._font)
         self.tb_point_no.setFixedSize(100, 25)
 

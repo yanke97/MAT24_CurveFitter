@@ -1,11 +1,12 @@
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import \
     FigureCanvasQTAgg as FigureCanvas
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QFrame,
                              QSizePolicy, QGridLayout, QLineEdit, QMenu,
-                             QFileDialog, QStatusBar, QToolBar, QAction, QMenuBar)
+                             QFileDialog, QStatusBar, QToolBar, QAction, QMenuBar, QLabel)
 
 from PyQt5.QtGui import (QFont, QIcon)
+from PyQt5.QtCore import Qt
 
 from pathlib import Path
 import pandas as pd
@@ -24,8 +25,10 @@ class CFAppGui(QMainWindow):
         self.resize(1160, 700)
 
         self._create_layouts()
+        self._create_line()
         self._create_graphs()
         self._create_fonts()
+        self._create_lbls()
         self._create_tbs()
         self._create_actns()
         self._create_status_bar()
@@ -36,8 +39,36 @@ class CFAppGui(QMainWindow):
         self._central_widget.setLayout(self._main_layout)
         self.setCentralWidget(self._central_widget)
 
-        self._layout_graphs.addWidget(self.graph_input, 0, 0, 2, 1)
-        self._layout_graphs.addWidget(self.graph_output, 0, 1)
+        self._main_layout.addWidget(self.graph_input, 0, 0, 2, 1)
+        self._main_layout.addWidget(self.graph_output, 0, 1)
+        self._layout_data.addWidget(
+            self._lbl_chars, 0, 0, 1, 2, alignment=Qt.AlignCenter)
+        self._layout_data.addWidget(self._lbl_char1, 2, 0)
+        self._layout_data.addWidget(self._lbl_char2, 3, 0)
+        self._layout_data.addWidget(self._lbl_char3, 4, 0)
+        self._layout_data.addWidget(self._lbl_char_data1, 2, 1)
+        self._layout_data.addWidget(self._lbl_char_data2, 3, 1)
+        self._layout_data.addWidget(self._lbl_char_data3, 4, 1)
+
+        self._layout_data.addWidget(self._v_line,0,2,9,1)
+        self._layout_data.addWidget(self._h_line,1,0,1,5)
+
+        self._layout_data.addWidget(
+            self._lbl_paras, 0, 3, 1, 2, alignment=Qt.AlignCenter)
+        self._layout_data.addWidget(self._lbl_para1, 2, 3)
+        self._layout_data.addWidget(self._lbl_para2, 3, 3)
+        self._layout_data.addWidget(self._lbl_para3, 4, 3)
+        self._layout_data.addWidget(self._lbl_para4, 5, 3)
+        self._layout_data.addWidget(self._lbl_para5, 6, 3)
+        self._layout_data.addWidget(self._lbl_para6, 7, 3)
+        self._layout_data.addWidget(self._lbl_para7, 8, 3)
+        self._layout_data.addWidget(self._lbl_para_data1, 2, 4)
+        self._layout_data.addWidget(self._lbl_para_data2, 3, 4)
+        self._layout_data.addWidget(self._lbl_para_data3, 4, 4)
+        self._layout_data.addWidget(self._lbl_para_data4, 5, 4)
+        self._layout_data.addWidget(self._lbl_para_data5, 6, 4)
+        self._layout_data.addWidget(self._lbl_para_data6, 7, 4)
+        self._layout_data.addWidget(self._lbl_para_data7, 8, 4)
 
         self._tool_bar.addAction(self.import_action)
         self._tool_bar.addAction(self.fit_action)
@@ -48,12 +79,17 @@ class CFAppGui(QMainWindow):
         self._file_menu.addAction(self.exit_action)
 
     def _create_layouts(self) -> None:
-        self._main_layout = QVBoxLayout()
-        self._layout_graphs = QGridLayout()
-        self._layout_btns = QHBoxLayout()
+        self._main_layout = QGridLayout()
+        self._layout_data = QGridLayout()
 
-        self._main_layout.addLayout(self._layout_btns)
-        self._main_layout.addLayout(self._layout_graphs)
+        self._main_layout.addLayout(self._layout_data, 1, 1)
+
+    def _create_line(self) -> None:
+        self._v_line = QFrame()
+        self._v_line.setFrameShape(QFrame.VLine)
+
+        self._h_line = QFrame()
+        self._h_line.setFrameShape(QFrame.HLine)
 
     def _create_graphs(self) -> None:
         """
@@ -80,9 +116,9 @@ class CFAppGui(QMainWindow):
         self.graph_output.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.axes_output_2 = self.graph_output.figure.subplots()
-        self.axes_output_2.set_title("Yield Curve")
-        self.axes_output_2.grid(True)
+        self.axes_output = self.graph_output.figure.subplots()
+        self.axes_output.set_title("Yield Curve")
+        self.axes_output.grid(True)
 
     def _create_tbs(self) -> None:
         self.tb_in_path = QLineEdit()
@@ -94,6 +130,54 @@ class CFAppGui(QMainWindow):
         self.tb_out_path.setBaseSize(175, 25)
         self.tb_out_path.setFont(self._font)
         self.tb_out_path.setPlaceholderText("Enter path to output .k-file")
+
+    def _create_lbls(self) -> None:
+        self._lbl_chars = QLabel("Material Characteristics")
+        self._lbl_chars.setFont(self._titel_font)
+
+        self._lbl_char1 = QLabel("Youngs Modulus")
+        self._lbl_char1.setFont(self._font)
+        self._lbl_char2 = QLabel("Yield Stress")
+        self._lbl_char2.setFont(self._font)
+        self._lbl_char3 = QLabel("Tensile Strength")
+        self._lbl_char3.setFont(self._font)
+        self._lbl_char_data1 = QLabel()
+        self._lbl_char_data1.setFont(self._font)
+        self._lbl_char_data2 = QLabel()
+        self._lbl_char_data2.setFont(self._font)
+        self._lbl_char_data3 = QLabel()
+        self._lbl_char_data3.setFont(self._font)
+
+        self._lbl_paras = QLabel("Fitted Parameters")
+        self._lbl_paras.setFont(self._titel_font)
+        self._lbl_para1 = QLabel()
+        self._lbl_para1.setFont(self._font)
+        self._lbl_para2 = QLabel()
+        self._lbl_para2.setFont(self._font)
+        self._lbl_para3 = QLabel()
+        self._lbl_para3.setFont(self._font)
+        self._lbl_para4 = QLabel()
+        self._lbl_para4.setFont(self._font)
+        self._lbl_para5 = QLabel()
+        self._lbl_para5.setFont(self._font)
+        self._lbl_para6 = QLabel()
+        self._lbl_para6.setFont(self._font)
+        self._lbl_para7 = QLabel()
+        self._lbl_para7.setFont(self._font)
+        self._lbl_para_data1 = QLabel()
+        self._lbl_para_data1.setFont(self._font)
+        self._lbl_para_data2 = QLabel()
+        self._lbl_para_data2.setFont(self._font)
+        self._lbl_para_data3 = QLabel()
+        self._lbl_para_data3.setFont(self._font)
+        self._lbl_para_data4 = QLabel()
+        self._lbl_para_data4.setFont(self._font)
+        self._lbl_para_data5 = QLabel()
+        self._lbl_para_data5.setFont(self._font)
+        self._lbl_para_data6 = QLabel()
+        self._lbl_para_data6.setFont(self._font)
+        self._lbl_para_data7 = QLabel()
+        self._lbl_para_data7.setFont(self._font)
 
     def _create_actns(self) -> None:
         self.import_action = QAction("Import .csv-file")
@@ -127,9 +211,8 @@ class CFAppGui(QMainWindow):
         -------
         None
         """
-        self._font = QFont()
-        self._font.setFamily("Calibri")
-        self._font.setPointSize(12)
+        self._titel_font = QFont("Calibri", 12, QFont.Bold)
+        self._font = QFont("Calibri", 12)
 
     def _create_status_bar(self) -> None:
         """
@@ -200,3 +283,57 @@ class CFAppGui(QMainWindow):
             self.axes_output.cla()
             self.axes_output.grid(True)
             self.axes_output.set_title("Yield Curve")
+
+    def fill_lbls(self, mat_char: list[float], extrap_type: int, paras: list[float]) -> None:
+        self._lbl_char_data1.setText(f"{mat_char[0]:.2f}")
+        self._lbl_char_data2.setText(f"{mat_char[1]:.2f}")
+        self._lbl_char_data3.setText(f"{mat_char[2]:.2f}")
+
+        if extrap_type == 0:
+            self._lbl_para1.setText("c")
+            self._lbl_para2.setText("phi")
+            self._lbl_para3.setText("n")
+            self._lbl_para4.setText("")
+            self._lbl_para5.setText("")
+            self._lbl_para6.setText("")
+            self._lbl_para7.setText("")
+            self._lbl_para_data1.setText(f"{paras[0]:.5f}")
+            self._lbl_para_data2.setText(f"{paras[1]:.5f}")
+            self._lbl_para_data3.setText(f"{paras[2]:.5f}")
+            self._lbl_para_data4.setText("")
+            self._lbl_para_data5.setText("")
+            self._lbl_para_data6.setText("")
+            self._lbl_para_data7.setText("")
+
+        elif extrap_type == 1:
+            self._lbl_para1.setText("sigma")
+            self._lbl_para2.setText("R")
+            self._lbl_para3.setText("B")
+            self._lbl_para4.setText("")
+            self._lbl_para5.setText("")
+            self._lbl_para6.setText("")
+            self._lbl_para7.setText("")
+            self._lbl_para_data1.setText(f"{paras[0]:.5f}")
+            self._lbl_para_data2.setText(f"{paras[1]:.5f}")
+            self._lbl_para_data3.setText(f"{paras[2]:.5f}")
+            self._lbl_para_data4.setText("")
+            self._lbl_para_data5.setText("")
+            self._lbl_para_data6.setText("")
+            self._lbl_para_data7.setText("")
+
+        elif extrap_type == 2:
+            self._lbl_para1.setText("alpha")
+            self._lbl_para2.setText("c")
+            self._lbl_para3.setText("phi")
+            self._lbl_para4.setText("n")
+            self._lbl_para5.setText("sigma")
+            self._lbl_para6.setText("R")
+            self._lbl_para7.setText("B")
+            self._lbl_para_data1.setText(f"{paras[0]:.2f}")
+            self._lbl_para_data2.setText(f"{paras[1]:.5f}")
+            self._lbl_para_data3.setText(f"{paras[2]:.5f}")
+            self._lbl_para_data4.setText(f"{paras[3]:.5f}")
+            self._lbl_para_data5.setText(f"{paras[4]:.5f}")
+            self._lbl_para_data6.setText(f"{paras[5]:.5f}")
+            self._lbl_para_data7.setText(f"{paras[6]:.5f}")
+
