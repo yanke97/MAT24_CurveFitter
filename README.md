@@ -7,8 +7,8 @@ This applications intend is to help the user create a *MAT_24 Ls-Dyna material c
 The user can choose from three different methods for fitting and extrapolating the test data.
 The below screenshots show the differences between the input data and the fitted and extrapolated data as well as the applications user interface.
 
-![extrapolations](docs\Example_Material_Curves.svg)
-![interface](docs\User_Interface.jpg)
+![extrapolations](https://github.com/yanke97/MAT24_CurveFitter/blob/main/docs/Example_Material_Curves.svg)
+![interface](https://github.com/yanke97/MAT24_CurveFitter/blob/main/docs/User_Interface.jpg)
 
 **Table of Contents**
 
