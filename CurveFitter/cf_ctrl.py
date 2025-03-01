@@ -1,20 +1,34 @@
-from sys import exit as sys_exit
-from configparser import ConfigParser
+import sys
+from functools import partial
+from datetime import datetime
+from configparser import ConfigParser, NoSectionError
 from pathlib import Path
 import pandas as pd
 
-from functools import partial
-from datetime import datetime
 from PyQt5.QtWidgets import QLineEdit
 
-from CF_Gui import CFAppGui
-from CF_Errors import FileError, ExportPointNoError, DataError
-from CF_ExportDialog import ExportDialog
-from CF_SettingsDialog import SettingsDialog
-
+from cf_errors import FileError, ExportPointNoError, DataError
+from cf_exportdialog import ExportDialog
+from cf_settingsdialog import SettingsDialog
 
 class CfCtrl:
-    def __init__(self, gui: CFAppGui, model):
+    def __init__(self, gui, model, cwd: Path) -> None:
+        """
+        CfController init function.
+        ...
+
+        Parameter
+        ---------
+        gui: CFGui
+        model: CFModel
+        cwd:Path
+            path to the current working directory
+
+        Returns
+        -------
+        None
+        """
+        self._cwd: Path = cwd
         self._gui = gui
         self._export_dlg = None
         self._settings_dlg = None
@@ -27,36 +41,85 @@ class CfCtrl:
         self._e_end: int = 0
         self._template_path_str: str = ""
 
+        self._update_status("*MAT_24 CurveFitter started.")
         self._read_ini()
         self._connect_signals()
-        self._update_status("Application started.")
 
     def _read_ini(self) -> None:
-        parser = ConfigParser()
-        parser.read(r"e:\15_MAT24_Curve fitter\CF.ini")
+        """
+        Reads the CurveFitter ini file.
+        ...
 
-        self._extrap_method: int = parser.getint(
-            "extrapolation_fitting", "extrapolation_method")
-        self._e_start: int = parser.getint(
-            "extrapolation_fitting", "e_extrap_start")
-        self._e_end: int = parser.getint(
-            "extrapolation_fitting", "e_extrap_end")
-        self._template_path_str: str = parser.get("export", "template_path")
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
+        ini_path = self._cwd/"config"/"CF.ini"
+
+        parser = ConfigParser()
+        parser.read(ini_path)
+
+        try:
+            self._extrap_method: int = parser.getint(
+                "extrapolation_fitting", "extrapolation_method")
+            self._e_start: int = parser.getint(
+                "extrapolation_fitting", "e_extrap_start")
+            self._e_end: int = parser.getint(
+                "extrapolation_fitting", "e_extrap_end")
+            self._template_path_str: str = parser.get(
+                "export", "template_path")
+        except NoSectionError:
+            self._update_status(
+                ".ini-file not found. Make sure CF.ini exists inside the config folder.", "error")
 
     def _write_ini(self, e_start: str, e_end: str, extrap_method: str,
                    template_path_str: str) -> None:
+        """
+        Writes to the CurveFitter ini file.
+        ...
+
+        Parameter
+        --------
+        e_start: str
+            index of the data point to start Youngs Modulus extrapolation
+        e_end: str
+            index of the last data point for Youngs Modulus extrapolation
+        extrap_method: str
+            the last set extrapolation method
+        template_path_str:str
+            string with the path to the .k-file template
+
+        Returns
+        -------
+        None
+        """
         parser = ConfigParser()
-        parser.read(r"e:\15_MAT24_Curve fitter\CF.ini")
+        parser.read(self._cwd/"config"/"CF.ini")
         parser.set("extrapolation_fitting", "e_extrap_start", e_start)
         parser.set("extrapolation_fitting", "e_extrap_end", e_end)
         parser.set("extrapolation_fitting",
                    "extrapolation_method", extrap_method)
         parser.set("export", "template_path", template_path_str)
 
-        with open(r"e:\15_MAT24_Curve fitter\CF.ini", "w") as configfile:
+        with open(self._cwd/"config"/"CF.ini", "w") as configfile:
             parser.write(configfile)
 
-    def _connect_signals(self):
+    def _connect_signals(self) -> None:
+        """
+        Connect signals to functions.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Return
+        ------
+        """
         # functions (slots) triggered by events (signals) usually need to be
         # able to be called with out additonal arguments. But some times it
         # might be necessary to call a function with arguments.
@@ -107,6 +170,21 @@ class CfCtrl:
             self._gui.statusBar().setStyleSheet("background-color : #BDD5E7")
 
     def _file_dialog(self, file_type: str, identifier: str) -> None:
+        """
+        Open a file dialog and process the selected file according to its file type.
+        ...
+
+        Parameter
+        ---------
+        file_type: str
+            string indicating the expected fiel type
+        identifier: str
+            string identifying if the .k-file is an export file or a template file
+
+        Return
+        ------
+        None
+        """
         path, _ = self._gui.file_dialog(file_type)
 
         if file_type == "*.csv":
@@ -118,9 +196,38 @@ class CfCtrl:
             self._update_tb(self._settings_dlg.tb_template_path, str(path))
 
     def _update_tb(self, tb: QLineEdit, text: str) -> None:
+        """
+        Update textboxes.
+        ...
+
+        Parameter
+        ---------
+        tb: QLineEdit
+            The textbox to be updated
+        text:str
+            the string with which the textbox is to be updated
+
+        Return
+        ------
+        None
+        """
         tb.setText(text)
 
     def _get_data(self, user_input: str = "") -> None:
+        """
+        Process given .csv-fiel from user input. Performs checks and calls 
+        CFModel.get_data_from_file.
+        ...
+
+        Paramter:
+        ---------
+        user_input:str
+            str from textbox of the file dialog
+
+        Return
+        ------
+        None
+        """
         if not user_input:
             file_path: Path = Path(
                 self._gui.tb_in_path.text().replace("\"", ""))
@@ -138,46 +245,70 @@ class CfCtrl:
                 f"{type(error).__name__} - {error.args[0]}", "error")
 
     def _fit_extrap(self) -> None:
+        """
+        Handles the curve fitting and extrapolation process.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Return
+        ------
+        None
+        """
         if self._data.empty:
             self._update_status("No data found, please import data.", "error")
 
         else:
             self._mat_characteristics = self._model.comp_material_data(
                 self._data, self._e_start, self._e_end)
-    
+
             self._data = self._model.comp_true_stress_strain(
                 self._data, self._mat_characteristics[3], self._mat_characteristics[4])
             self._update_status("Material properties calculated.")
-    
+
             self._fitted_data = self._model.extrapolate(
                 [self._data, self._mat_characteristics[3], self._mat_characteristics[4],
                  self._mat_characteristics[5], self._mat_characteristics[2]], self._extrap_method)
             self._update_status("Yield Curve computed.")
-    
+
             self._gui.fill_lbls(self._mat_characteristics,
                                 self._extrap_method, self._fitted_data[2])
-    
+
             self._gui.clear_graphs("output_1")
             self._gui.plot_data(self._data, "output_1")
-    
+
             self._gui.plot_data(
                 [self._data["eng_strain"][0:self._mat_characteristics[3]],
                     self._data["eng_strain"][0:self._mat_characteristics[3]]*self._mat_characteristics[0]],
                 "output_1", name=f"Youngs Modulus ({self._mat_characteristics[0]:.2f})")
-    
+
             self._gui.clear_graphs("output")
             self._gui.plot_data([self._data["plst_strain"],
                                  self._data["plst_stress"]], "output", name="Input Data")
             self._gui.plot_data(self._fitted_data, "output",
                                 name="Fitted Yield Curve")
 
-    def _export(self):
+    def _export(self) -> None:
+        """
+        Handles the data export to a .k-file.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Return
+        ------
+        None
+        """
         if not self._mat_characteristics:
             self._update_status("No Data to Export.", "error")
 
         else:
-            self._export_dlg = ExportDialog(
-                round(self._mat_characteristics[6], 2), self._gui)
+            self._export_dlg = ExportDialog(self._cwd,
+                                            round(self._mat_characteristics[6], 2), self._gui)
 
             # when the firs btn in the box (Save) is clicked an accepted signal is
             # emitted since this btn has a acceptive role in the GUI. This signal
@@ -189,22 +320,23 @@ class CfCtrl:
                 partial(self._file_dialog, "*.k", "export"))
 
             if self._export_dlg.exec() == 1:
-
+                
                 title = self._export_dlg.tb_title.text()
                 mid = self._export_dlg.tb_mid.text()
                 rho = self._export_dlg.tb_rho.text()
                 poisons_ratio = self._export_dlg.tb_poisons_ratio.text()
                 fail = self._export_dlg.tb_fail.text()
-                point_no = int(self._export_dlg.tb_point_no.text())
+                point_no = self._export_dlg.tb_point_no.text()
                 export_path = self._export_dlg.tb_out_path.text()
                 if self._export_dlg.rdbtn_equi.isChecked() is True:
                     spacing = "equi"
                 else:
                     spacing = "uneven"
 
+                export_input = [title, mid, rho, poisons_ratio, fail, point_no, export_path, spacing]
+
                 try:
-                    self._model.export_data(title, mid, rho, poisons_ratio,
-                                            fail, point_no, spacing, self._fitted_data,
+                    self._model.export_data(export_input, self._fitted_data,
                                             self._mat_characteristics[0], export_path, self._template_path_str)
                     self._update_status(
                         f"Succesfully exported curve to {export_path}.")
@@ -214,12 +346,37 @@ class CfCtrl:
                         f"{type(error).__name__} - {error.args[0]}", "error")
                     self._export()
 
-    def _exit_app(self):
-        sys_exit()
+    def _exit_app(self) -> None:
+        """
+        Terminates the applicaiton.
+        ...
 
-    def _settings(self):
+        Parameter
+        ---------
+        None 
+
+        Return
+        ------
+        None
+        """
+
+        sys.exit()
+
+    def _settings(self) -> None:
+        """
+        Opens a Settings Dialog and handles the input.
+        ...
+
+        Parameter
+        --------
+        None
+
+        Return 
+        ------
+        None
+        """
         extrap_methods = ["Swift", "Voce", "Swift-Voce"]
-        self._settings_dlg = SettingsDialog(extrap_methods, self._extrap_method, self._e_start,
+        self._settings_dlg = SettingsDialog(self._cwd, extrap_methods, self._extrap_method, self._e_start,
                                             self._e_end, self._template_path_str,
                                             self._gui)
 

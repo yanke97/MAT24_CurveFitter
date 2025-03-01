@@ -14,7 +14,7 @@ import pandas as pd
 
 class CFAppGui(QMainWindow):
 
-    def __init__(self) -> None:
+    def __init__(self, cwd: Path) -> None:
         """
         Gui init method
         """
@@ -30,7 +30,7 @@ class CFAppGui(QMainWindow):
         self._create_fonts()
         self._create_lbls()
         self._create_tbs()
-        self._create_actns()
+        self._create_actns(cwd)
         self._create_status_bar()
         self._create_tool_bar()
         self._create_menu_bar()
@@ -50,8 +50,8 @@ class CFAppGui(QMainWindow):
         self._layout_data.addWidget(self._lbl_char_data2, 3, 1)
         self._layout_data.addWidget(self._lbl_char_data3, 4, 1)
 
-        self._layout_data.addWidget(self._v_line,0,2,9,1)
-        self._layout_data.addWidget(self._h_line,1,0,1,5)
+        self._layout_data.addWidget(self._v_line, 0, 2, 9, 1)
+        self._layout_data.addWidget(self._h_line, 1, 0, 1, 5)
 
         self._layout_data.addWidget(
             self._lbl_paras, 0, 3, 1, 2, alignment=Qt.AlignCenter)
@@ -79,12 +79,36 @@ class CFAppGui(QMainWindow):
         self._file_menu.addAction(self.exit_action)
 
     def _create_layouts(self) -> None:
+        """
+        Create layouts for the GUI.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
         self._main_layout = QGridLayout()
         self._layout_data = QGridLayout()
 
         self._main_layout.addLayout(self._layout_data, 1, 1)
 
     def _create_line(self) -> None:
+        """
+        Create a vertical line.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
         self._v_line = QFrame()
         self._v_line.setFrameShape(QFrame.VLine)
 
@@ -93,7 +117,7 @@ class CFAppGui(QMainWindow):
 
     def _create_graphs(self) -> None:
         """
-        Create graph
+        Create graphs.
         ...
 
         Parameters
@@ -121,6 +145,18 @@ class CFAppGui(QMainWindow):
         self.axes_output.grid(True)
 
     def _create_tbs(self) -> None:
+        """
+        Create textboxes for the GUI.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
         self.tb_in_path = QLineEdit()
         self.tb_in_path.setBaseSize(175, 25)
         self.tb_in_path.setFont(self._font)
@@ -132,6 +168,18 @@ class CFAppGui(QMainWindow):
         self.tb_out_path.setPlaceholderText("Enter path to output .k-file")
 
     def _create_lbls(self) -> None:
+        """
+        Create textboxes for the GUI.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
         self._lbl_chars = QLabel("Material Characteristics")
         self._lbl_chars.setFont(self._titel_font)
 
@@ -179,21 +227,34 @@ class CFAppGui(QMainWindow):
         self._lbl_para_data7 = QLabel()
         self._lbl_para_data7.setFont(self._font)
 
-    def _create_actns(self) -> None:
+    def _create_actns(self, cwd: Path) -> None:
+        """
+        Create actions for the GUI.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
+
         self.import_action = QAction("Import .csv-file")
         self.import_action.setFont(self._font)
         self.import_action.setIcon(
-            QIcon(r"e:\15_MAT24_Curve fitter\00_Daten\file-import.png"))
+            QIcon(str(cwd/"data"/"file-import.png")))
 
         self.fit_action = QAction("Fit and Extrapolate Curve")
         self.fit_action.setFont(self._font)
         self.fit_action.setIcon(
-            QIcon(r"E:\15_MAT24_Curve fitter\00_Daten\graph-curve.png"))
+            QIcon(str(cwd/"data"/"graph-curve.png")))
 
         self.export_action = QAction("Export to .k-file")
         self.export_action.setFont(self._font)
         self.export_action.setIcon(
-            QIcon(r"E:\15_MAT24_Curve fitter\00_Daten\file-export.png"))
+            QIcon(str(cwd/"data"/"file-export.png")))
 
         self.settings_action = QAction("Settings...")
         self.exit_action = QAction("Exit")
@@ -233,10 +294,35 @@ class CFAppGui(QMainWindow):
         self.setStatusBar(status)
 
     def _create_tool_bar(self) -> None:
+        """
+        Create the tool bar for the GUI.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
+
         self._tool_bar = QToolBar()
         self.addToolBar(self._tool_bar)
 
     def _create_menu_bar(self) -> None:
+        """
+        Create the menu bar for the GUI.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
         self._menu_bar = QMenuBar()
         self.setMenuBar(self._menu_bar)
         self._file_menu = QMenu("&File", self)
@@ -245,21 +331,46 @@ class CFAppGui(QMainWindow):
     def file_dialog(self, file_type: str) -> tuple:
         """
         Open file dialog window and return the path to selected folder.
+        ...
 
         Parameter
         ---------
-        None
+        file_type: str
+            filetype necessary to preselect files.
 
         Return
         ------
-        path: Path
-            path pointing to the folder where the banking data is stored
-
+        _: tuple
+            a tuple containing the file path and file extension.
         """
+
         return QFileDialog.getOpenFileName(
             self, "Select file", "", file_type)
 
-    def plot_data(self, data, graph: str, line_type="-", name: str = "") -> None:
+    def plot_data(self, data: pd.DataFrame | list, graph: str, line_type: str = "-", name: str = "") -> None:
+        """
+        Plot data to a graph.
+        ...
+
+        Parameter
+        ---------
+        data: Dataframe|list
+            data to be plotted
+
+        graph: str
+           string specifiying to which graph ("input" or "output") the data shall be plotted
+
+        line_type: str
+            string specifiying the line type in which the data is plotted.
+
+        name: str 
+            text to be written in the curve label 
+
+        Returns
+        -------
+        None
+        """
+
         if type(data) == pd.DataFrame and graph == "input":
             self.axes_input.plot(data["eng_strain"],
                                  data["eng_stress"], line_type)
@@ -275,6 +386,19 @@ class CFAppGui(QMainWindow):
             self.graph_output.draw_idle()
 
     def clear_graphs(self, graph: str) -> None:
+        """
+        Clear the graphs
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
+
         if graph == "input":
             self.axes_input.cla()
             self.axes_input.grid(True)
@@ -285,6 +409,26 @@ class CFAppGui(QMainWindow):
             self.axes_output.set_title("Yield Curve")
 
     def fill_lbls(self, mat_char: list[float], extrap_type: int, paras: list[float]) -> None:
+        """
+        Fill labels representing the fitted datas parameter and characteristics.
+        ...
+
+        Parameter
+        ---------
+        mat_char: list[float]
+            list of material characteristics
+
+        extrap_type: int
+            etrapolation type represented by an integer
+
+        paras: list[float]
+            the parameter of the fitted curve
+
+        Return
+        ------
+        None
+        """
+
         self._lbl_char_data1.setText(f"{mat_char[0]:.2f}")
         self._lbl_char_data2.setText(f"{mat_char[1]:.2f}")
         self._lbl_char_data3.setText(f"{mat_char[2]:.2f}")
@@ -336,4 +480,3 @@ class CFAppGui(QMainWindow):
             self._lbl_para_data5.setText(f"{paras[4]:.5f}")
             self._lbl_para_data6.setText(f"{paras[5]:.5f}")
             self._lbl_para_data7.setText(f"{paras[6]:.5f}")
-

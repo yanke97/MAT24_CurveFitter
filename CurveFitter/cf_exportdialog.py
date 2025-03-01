@@ -1,17 +1,38 @@
+from pathlib import Path
 from PyQt5.QtWidgets import (QDialog, QPushButton, QDialogButtonBox, QLineEdit,
                              QLabel, QFormLayout, QSpacerItem, QRadioButton, QSizePolicy)
 from PyQt5.QtGui import (QFont, QIcon)
-from PyQt5.QtCore import Qt
 
 
 class ExportDialog(QDialog):
-    def __init__(self, failure_strain: float=0.0, parent=None):
+    """
+    Dialog window to recieve user input for data export.
+    """
+
+    def __init__(self, cwd: Path, failure_strain: float, parent=None) -> None:
+        """
+        Export Dialogs init function.
+        ...
+
+        Parameter
+        ---------
+        cwd: Path
+            path to current working directory
+        failure strain: float
+            failure strain of material.
+        parent:_ default= None
+            parent widget of the dialog.
+
+        Return
+        ------
+        None
+        """
         super().__init__(parent)
 
         self.setWindowTitle("Export")
-        self.setSizePolicy(QSizePolicy.Fixed,QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._create_fonts()
-        self._create_btns()
+        self._create_btns(cwd)
         self._create_lbls()
         self._create_tbs(failure_strain)
         self._create_rdbtn()
@@ -33,16 +54,40 @@ class ExportDialog(QDialog):
         self._layout.addRow(self.rdbtn_equi)
         self._layout.addRow(self.btnbx)
 
-    def _create_btns(self) -> None:
+    def _create_btns(self, cwd: Path) -> None:
+        """
+        Create the buttons for the dialog.
+        ...
+
+        Parameter
+        ---------
+        cwd: Path
+            path to current working directory
+
+        Return
+        ------
+        None
+        """
         btns = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.btnbx = QDialogButtonBox(btns)
 
         self.btn_file_out = QPushButton()
         self.btn_file_out.setBaseSize(25, 25)
-        self.btn_file_out.setIcon(
-            QIcon(r"e:\15_MAT24_Curve fitter\00_Daten\open-folder.png"))
+        self.btn_file_out.setIcon(QIcon(str(cwd/"data"/"open-folder.png")))
 
     def _create_lbls(self) -> None:
+        """
+        Create the labels necessary for the dialog.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Returns
+        -------
+        None
+        """
         self._lbl_info = QLabel(
             "Additional information for material card:")
         self._lbl_info.setFont(self._titel_font)
@@ -60,7 +105,20 @@ class ExportDialog(QDialog):
         self._lbl_point_no = QLabel("No of datapoints to export:")
         self._lbl_point_no.setFont(self._font)
 
-    def _create_tbs(self, failure_strain) -> None:
+    def _create_tbs(self, failure_strain: int) -> None:
+        """
+        Create the textboxes necessary for the dialog.
+        ...
+
+        Parameter
+        ---------
+        failure_strain: int
+            failure strain of the material
+
+        Return
+        ------
+        None
+        """
         self.tb_title = QLineEdit("Test")
         self.tb_title.setFont(self._font)
         self.tb_mid = QLineEdit("20000000")
@@ -80,9 +138,21 @@ class ExportDialog(QDialog):
         self.tb_out_path.setBaseSize(100, 25)
         self.tb_out_path.setFont(self._font)
         self.tb_out_path.setPlaceholderText("Enter path to output .k-file")
-        # self.tb_out_path.setAlignment(Qt.AlignRight)
 
     def _create_rdbtn(self) -> None:
+        """
+        Create the radio buttons needed for the dialog.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Return
+        ------
+        None
+        """
+
         self.rdbtn_equi = QRadioButton("Equidistant Spacing")
         self.rdbtn_equi.setFont(self._font)
 
@@ -91,5 +161,18 @@ class ExportDialog(QDialog):
         self.rdbtn_uneven.setFont(self._font)
 
     def _create_fonts(self) -> None:
+        """
+        Create the dialogs fonts.
+        ...
+
+        Parameter
+        ---------
+        None
+
+        Return
+        ------
+        None
+        """
+
         self._titel_font = QFont("Calibri", 12, QFont.Bold)
         self._font = QFont("Calibri", 12)

@@ -1,12 +1,13 @@
-import pandas as pd
 from pathlib import Path
 from csv import Sniffer
-import numpy as np
 from math import log, e
-from scipy.optimize import curve_fit
 from string import Template
 
-from CF_Errors import FileError, ExportPointNoError, TemplateError, DataError
+import pandas as pd
+import numpy as np
+from scipy.optimize import curve_fit
+
+from cf_errors import FileError, ExportPointNoError, TemplateError, DataError
 
 
 class LsDynaTemplate(Template):
@@ -19,22 +20,49 @@ class LsDynaTemplate(Template):
 
 
 def _hooks_straight(x, m) -> float:
+    """
+    Equation describing the hooks straight.
+    """
     return m*x
 
 
 def _swift_extrapolation(x, c, phi, n) -> float:
+    """
+    Equation describing the flow curve according to Swift.
+    """
     return c*(phi+x)**n
 
 
 def _voce_extrapolation(x, sigma, R, B) -> float:
+    """
+    Equation describing the flow curve according to Voce.
+    """
     return sigma + R*(1-np.exp(-B*x))
 
 
 def _swift_voce_extrapolation(x, alpha, c, phi, n, sigma, R, B) -> float:
+    """
+    Equation describing the flow curve as a combination of Swift and Voce.
+    """
     return alpha*(c*(phi+x)**n) + (1-alpha)*(sigma + R*(1-np.exp(-B*x)))
 
 
 def get_data_from_file(file_path: Path) -> pd.DataFrame:
+    """
+    Read data from given .csv-file and store it in a dataframe.
+    ...
+
+    Parameter
+    ---------
+    file_path: Path
+        path to the .csv-file
+
+    Returns
+    -------
+    _: DataFrame
+        dataframe containing the data from the .csv-file.
+    """
+
     if file_path.is_file() is True:
         header, delimiter = _get_csv_info(file_path)
 
@@ -44,11 +72,12 @@ def get_data_from_file(file_path: Path) -> pd.DataFrame:
         else:
             df = pd.read_csv(file_path, delimiter=delimiter,
                              header=None)
-        
+
         if df.shape[1] != 2:
             raise DataError(df.shape[1]) from None
         else:
-            df.set_axis(["eng_strain", "eng_stress"], axis="columns", inplace=True)
+            df = df.set_axis(["eng_strain", "eng_stress"],
+                             axis="columns", copy=False)
 
             df["eng_strain"] = df["eng_strain"] - df["eng_strain"][0]
             df["eng_stress"] = df["eng_stress"] - df["eng_stress"][0]
@@ -59,6 +88,22 @@ def get_data_from_file(file_path: Path) -> pd.DataFrame:
 
 
 def _get_csv_info(file_path: Path) -> tuple[bool, str]:
+    """
+    Collects information about the given .csv-file regarding existance of a
+    header and the delimiter character.
+    ...
+
+    Parameter
+    ---------
+    file_path: Path
+        path to the .csv-file
+
+    Returns
+    -------
+    _: tuple[bool, str]
+        bool to describe the existance of a header (True == yes)
+        str to return the delimiter
+    """
     with open(file_path, 'r') as f:
         # Sniffer analyzes the first few lines
         sniffer = Sniffer()
@@ -66,18 +111,65 @@ def _get_csv_info(file_path: Path) -> tuple[bool, str]:
         return sniffer.has_header(sample), sniffer.sniff(sample).delimiter
 
 
-def comp_true_stress_strain(df: pd.DataFrame, Rp_02_I: int, Rm_I: int) -> pd.DataFrame:
-    df["strain"] = np.log(1+(df["eng_strain"][0:Rm_I]))           # strain [-]
-    df["stress"] = df["eng_stress"][0:Rm_I] * \
-        np.exp(df["strain"][0:Rm_I])     # stress [MPa]
+def comp_true_stress_strain(df: pd.DataFrame, rp02_i: int, rm_i: int) -> pd.DataFrame:
+    """
+    Computes the true stress - true strain curve of the given data.
+    ...
 
-    df["plst_strain"] = df["strain"].loc[Rp_02_I:] - df["strain"][Rp_02_I]
-    df["plst_stress"] = df["stress"].loc[Rp_02_I:]
+    Parameter
+    ---------
+    df: DataFrame
+        dataframe containing the data
+    rp02_i: int
+        index of the datapoint for rp02
+    rm_i: int
+        index of the datapoint for rm
+
+    Returns
+    -------
+    _: DataFrame
+        dataframe containing the user_input data plus 
+        data of the true stress - true strain curve.
+    """
+
+    df["strain"] = np.log(1+(df["eng_strain"][0:rm_i])
+                          )             # strain [-]
+    df["stress"] = df["eng_stress"][0:rm_i] * \
+        np.exp(df["strain"][0:rm_i]
+               )                                # stress [MPa]
+
+    df["plst_strain"] = df["strain"].loc[rp02_i:] - df["strain"][rp02_i]
+    df["plst_stress"] = df["stress"].loc[rp02_i:]
 
     return df
 
 
-def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> list[float]:
+def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> list[float | int]:
+    """
+    Computing different material characteristics.
+
+    Parameter
+    ---------
+    df: DataFrame
+        dataframe containing the data
+    e_start: int
+        index of the first data point used for computation of youngs modulus
+    e_end: int
+        index of the last data point used for computation of youngs modulus
+
+    Returns
+    -------
+    _: list[float|int]
+        list containing the material charateristics
+        0 = youngs modulus [float]
+        1 = Rp_02 [float]
+        2 = Rm [float]
+        3 = index of Rp_02 [int]
+        4 = index of Rm [int]
+        5 = uniform strain [float]
+        6 = failure strain [float]
+    """
+
     # compute youngs modulus
     res = curve_fit(_hooks_straight,
                     df["eng_strain"][e_start:e_end], df["eng_stress"][e_start:e_end])
@@ -87,30 +179,65 @@ def comp_material_data(df: pd.DataFrame, e_start: int, e_end: int) -> list[float
     # Compute difference between measurement data and hooks straight
     difference = df["eng_stress"] - (df["eng_strain"]-0.002)*E
 
-    Rp_02_I = np.abs(difference).argmin()
+    rp02_i = np.abs(difference).argmin()
     # Rp_0.2 of the material
-    Rp_02 = df["eng_stress"][Rp_02_I]
+    rp02 = df["eng_stress"][rp02_i]
 
     # Compute Failure strain A_5
     if df["eng_stress"].iloc[-1] > 50:
-        A_5_I = df["eng_strain"].index[-1]
+        a5_i = df["eng_strain"].index[-1]
 
     else:
         # Compute pandas series with stress drops
         stress_drop = pd.Series(df["eng_stress"].diff())
-        A_5_I = stress_drop.idxmin()-1
+        a5_i = stress_drop.idxmin()-1
 
-    Af = (df["eng_strain"][A_5_I]) - (df["eng_stress"][A_5_I]/E)
+    # Compute failure strain
+    af = (df["eng_strain"][a5_i]) - (df["eng_stress"][a5_i]/E)
 
     # Rm of the material
-    Rm_I = df["eng_stress"].idxmax()
-    Rm = df["eng_stress"][Rm_I]
-    Ag = (df["eng_strain"][Rm_I]) - (Rm/E)
+    rm_i = df["eng_stress"].idxmax()
+    rm = df["eng_stress"][rm_i]
 
-    return [E, Rp_02, Rm, Rp_02_I, Rm_I, Ag, Af]
+    # Unifrom strain
+    ag = (df["eng_strain"][rm_i]) - (rm/E)
+
+    return [E, rp02, rm, rp02_i, rm_i, ag, af]
 
 
-def extrapolate(data: list, extrap_type: int, end: int = 1, resolution: int = 100) -> list:
+def extrapolate(data: list, extrap_type: int, end: int = 1,
+                resolution: int = 100) -> list[pd.Series | list[float]]:
+    """
+    Fit and extrapolate curve with selected fitting type.
+    ...
+
+    Parameter
+    ---------
+    data: list
+        list containg necessary user_input data
+        0 = dataframe with data to be fitted
+        1 = index of start point for data fitting (index of Rp_02)
+        2 = index of end point for data fitting (index of Rm)
+    extrap_type: int
+        integer indicating the selected fitting type
+        0 = Swift
+        1 = Voce
+        2 = Swift-Voce
+    end: int, default = 1 (=100%)
+        integer indicating upto what strain the curve shall be extraploated 
+    resolution: int, default = 100
+        integer indicating the number of datapoints to be returned
+
+    Returns
+    -------
+    _: Series
+        list of series containing fitting results and parameter
+        0 = strain values [Series]
+        1 = stress values [Series]
+        2 = parameter [list[float]]
+
+    """
+
     df = data[0]
     start_index = data[1]
     end_index = data[2]
@@ -123,11 +250,11 @@ def extrapolate(data: list, extrap_type: int, end: int = 1, resolution: int = 10
 
     if extrap_type == 0:
         # Swift extrapolation
-        Ag = data[3]
-        Rm = data[4]
+        ag = data[3]
+        rm = data[4]
 
-        n_0 = log(Ag+1)
-        c_0 = Rm*(e/n_0)**n_0
+        n_0 = log(ag+1)
+        c_0 = rm*(e/n_0)**n_0
         phi_0 = 0.1
 
         initial_guess = [c_0, phi_0, n_0]
@@ -200,27 +327,57 @@ def extrapolate(data: list, extrap_type: int, end: int = 1, resolution: int = 10
     return result
 
 
-def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, point_no: int,
-                spacing: str, fitted_data: list[list], E: str, path_str: str, template_path_str: str) -> Path:
-    if int(point_no) > 100 or int(point_no) < 2:
+def export_data(user_input: list[str], fitted_data: list[list], E: float, path_str: str,
+                template_path_str: str) -> Path:
+    """
+    Prepate fitted and extrapolated data for export to .k-file.
+    ...
+
+    Parameter
+    ---------
+    user_input: list[str]
+        list containing user input data from export dialog.
+        0 = material title
+        1 = material id
+        2 = rho
+        3 = posions ratio
+        4 = failure strain
+        5 = number of datapoints to be exported
+        6 = path to export to
+        7 = spacing type ("equi" or "uneven")
+    fitted_data: list[list]
+        list containg list with the data to be exported
+        0 = strain data
+        1 = stress data
+    E: float
+        the youngs modulus computed
+    path_str: str
+        string indicating the path to which the file shall be exported
+    template_path_str: str
+        string pointing to the template path
+
+    Returns:
+    _: Path
+        path to which the file was saved.
+    """
+
+    if int(user_input[5]) > 100 or int(user_input[5]) < 2:
         raise ExportPointNoError from None
     else:
         export_data: dict = {}
-        export_data["Title"] = title
-        export_data["mid"] = mid.rjust(10)
-        export_data["ro"] = rho.rjust(10)
+        export_data["Title"] = user_input[0]
+        export_data["mid"] = user_input[1].rjust(10)
+        export_data["ro"] = user_input[2].rjust(10)
         export_data["E"] = str(round(E, 2)).rjust(10)
-        export_data["pr"] = poisons_ratio.rjust(10)
-        export_data["fail"] = fail.rjust(10)
+        export_data["pr"] = user_input[3].rjust(10)
+        export_data["fail"] = user_input[4].rjust(10)
 
-        print(point_no)
-
-        if spacing == "equi" or point_no == 100:
-            ids = np.linspace(0, 100, point_no+1)
+        if user_input[7] == "equi" or user_input[5] == 100:
+            ids = np.linspace(0, 100, int(user_input[5])+1)
 
         else:
-            point_no_1 = round(point_no*0.6)
-            point_no_2 = point_no - point_no_1
+            point_no_1 = round(int(user_input[5])*0.6)
+            point_no_2 = int(user_input[5]) - point_no_1
 
             ids_1 = np.linspace(0, 50, point_no_1)
             ids_1 = np.round(ids_1).astype(int)
@@ -254,7 +411,30 @@ def export_data(title: str, mid: str, rho: str, poisons_ratio: str, fail: str, p
         return path
 
 
-def write_to_file(data: dict, path_str: str, template_path_str: str) -> None:
+def write_to_file(data: dict[str, str], path_str: str, template_path_str: str) -> None:
+    """
+    Write data to be exported to file.
+    ...
+
+    Parameter
+    ---------
+    data: dict[str:str]
+        containg the data to be exported.
+    path_str: str
+        string indicating the path to which the file shall be exported
+    template_path_str: str
+        string pointing to the template path
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    FileError
+    TemplateError
+
+    """
     template_path = Path(template_path_str)
     path: Path = Path(path_str.replace("\"", ""))
 
