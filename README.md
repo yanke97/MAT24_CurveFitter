@@ -61,7 +61,7 @@ Please note that *MAT_24_CurveFitter is unit independend. It is therefore upon t
 *MAT_24_CurveFitter does not currently support:
 
 - Creation of tabulated material cards e.g. to discribe strain rate dependency.
-- Routine to process material data with a distinct yield strength. If such material data is loaded it will be process as data without a distinct yield strength.
+- Routine to process material data with a distinct yield strength. If such material data is loaded it will be processed as data without a distinct yield strength.
 
 ## Author
 
